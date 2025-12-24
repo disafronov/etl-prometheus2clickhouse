@@ -1,0 +1,41 @@
+---
+name: Lint and test
+
+"on":
+  pull_request:
+    branches:
+      - main
+      - release
+
+jobs:
+  lint_and_test:
+    name: "Lint and test (Python ${{ matrix.python-version }})"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --python ${{ matrix.python-version }}
+        env:
+          UV_PYTHON: ${{ matrix.python-version }}
+
+      - name: Run all checks
+        run: make all
+        env:
+          UV_PYTHON: ${{ matrix.python-version }}
+
+      - name: Check if code was reformatted
+        if: always()
+        run: git diff --exit-code
