@@ -29,6 +29,7 @@ def test_clickhouse_client_init(mock_get_client: Mock) -> None:
         password=None,
         connect_timeout=10,
         send_receive_timeout=300,
+        verify=True,
     )
 
 
@@ -51,6 +52,7 @@ def test_clickhouse_client_init_with_auth(mock_get_client: Mock) -> None:
         password="testpass",
         connect_timeout=10,
         send_receive_timeout=300,
+        verify=True,
     )
 
 
@@ -73,6 +75,29 @@ def test_clickhouse_client_init_with_custom_timeouts(mock_get_client: Mock) -> N
         password=None,
         connect_timeout=30,
         send_receive_timeout=600,
+        verify=True,
+    )
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_init_with_insecure(mock_get_client: Mock) -> None:
+    """Client should disable TLS verification when insecure=True."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = ClickHouseConfig(
+        url="http://ch:8123",
+        table="db.tbl",
+        insecure=True,
+    )
+    ClickHouseClient(cfg)
+    mock_get_client.assert_called_once_with(
+        url="http://ch:8123",
+        username=None,
+        password=None,
+        connect_timeout=10,
+        send_receive_timeout=300,
+        verify=False,
     )
 
 

@@ -25,6 +25,7 @@ def test_pushgateway_client_init() -> None:
     assert client._timeout == 10
     assert client._auth is None
     assert client._headers == {}
+    assert client._verify is True
 
 
 def test_pushgateway_client_init_with_token() -> None:
@@ -38,6 +39,7 @@ def test_pushgateway_client_init_with_token() -> None:
     client = PushGatewayClient(config)
     assert client._headers["Authorization"] == "Bearer test_token"
     assert client._auth is None
+    assert client._verify is True
 
 
 def test_pushgateway_client_init_with_basic_auth() -> None:
@@ -52,6 +54,19 @@ def test_pushgateway_client_init_with_basic_auth() -> None:
     client = PushGatewayClient(config)
     assert client._auth == ("testuser", "testpass")
     assert "Authorization" not in client._headers
+    assert client._verify is True
+
+
+def test_pushgateway_client_init_with_insecure() -> None:
+    """Client should disable TLS verification when insecure=True."""
+    config = PushGatewayConfig(
+        url="http://pg:9091",
+        job="test_job",
+        instance="test_instance",
+        insecure=True,
+    )
+    client = PushGatewayClient(config)
+    assert client._verify is False
 
 
 @patch("pushgateway_client.requests.post")
@@ -74,6 +89,7 @@ def test_pushgateway_client_push_start_success(mock_post: Mock) -> None:
     mock_post.assert_called_once()
     call_kwargs = mock_post.call_args[1]
     assert call_kwargs["timeout"] == 10
+    assert call_kwargs["verify"] is True
     assert "/metrics/job/test_job/instance/test_instance" in mock_post.call_args[0][0]
     body = call_kwargs["data"]
     assert "etl_timestamp_start" in body
@@ -155,3 +171,26 @@ def test_pushgateway_client_push_success_http_error(mock_post: Mock) -> None:
             window_seconds=300,
             rows_count=42,
         )
+
+
+@patch("pushgateway_client.requests.post")
+def test_pushgateway_client_push_with_insecure(mock_post: Mock) -> None:
+    """push_start() should use verify=False when insecure=True."""
+    config = PushGatewayConfig(
+        url="http://pg:9091",
+        job="test_job",
+        instance="test_instance",
+        insecure=True,
+    )
+    client = PushGatewayClient(config)
+
+    mock_response = Mock(spec=requests.Response)
+    mock_response.status_code = 200
+    mock_response.raise_for_status.return_value = None
+    mock_post.return_value = mock_response
+
+    client.push_start(1700000000.0)
+
+    mock_post.assert_called_once()
+    call_kwargs = mock_post.call_args[1]
+    assert call_kwargs["verify"] is False
