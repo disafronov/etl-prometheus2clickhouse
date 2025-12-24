@@ -1,0 +1,134 @@
+{
+  "etl-prometheus2clickhouse": {
+    "v1": {
+      "main": {
+        "application_error": {
+          "error": {
+            "type": "str",
+            "source": "main.application_error.error"
+          },
+          "error_type": {
+            "type": "str",
+            "source": "main.application_error.error_type"
+          },
+          "message": {
+            "type": "str",
+            "source": "main.application_error.message"
+          }
+        }
+      },
+      "prometheus_client": {
+        "query_failed": {
+          "error": {
+            "type": "str",
+            "source": "prometheus_client.query_failed.error"
+          },
+          "expression": {
+            "type": "str",
+            "source": "prometheus_client.query_failed.expression"
+          },
+          "url": {
+            "type": "str",
+            "source": "prometheus_client.query_failed.url"
+          },
+          "status_code": {
+            "type": "int",
+            "source": "prometheus_client.query_failed.status_code"
+          }
+        },
+        "invalid_response": {
+          "expression": {
+            "type": "str",
+            "source": "prometheus_client.invalid_response.expression"
+          },
+          "message": {
+            "type": "str",
+            "source": "prometheus_client.invalid_response.message"
+          }
+        }
+      },
+      "clickhouse_client": {
+        "connection_failed": {
+          "error": {
+            "type": "str",
+            "source": "clickhouse_client.connection_failed.error"
+          },
+          "url": {
+            "type": "str",
+            "source": "clickhouse_client.connection_failed.url"
+          }
+        },
+        "insert_failed": {
+          "error": {
+            "type": "str",
+            "source": "clickhouse_client.insert_failed.error"
+          },
+          "table": {
+            "type": "str",
+            "source": "clickhouse_client.insert_failed.table"
+          },
+          "rows_count": {
+            "type": "int",
+            "source": "clickhouse_client.insert_failed.rows_count"
+          }
+        }
+      },
+      "pushgateway_client": {
+        "push_failed": {
+          "error": {
+            "type": "str",
+            "source": "pushgateway_client.push_failed.error"
+          },
+          "url": {
+            "type": "str",
+            "source": "pushgateway_client.push_failed.url"
+          }
+        }
+      },
+      "etl_job": {
+        "check_start_failed": {
+          "message": {
+            "type": "str",
+            "source": "etl_job.check_start_failed.message"
+          }
+        },
+        "check_start_warning": {
+          "message": {
+            "type": "str",
+            "source": "etl_job.check_start_warning.message"
+          }
+        },
+        "mark_start_failed": {
+          "message": {
+            "type": "str",
+            "source": "etl_job.mark_start_failed.message"
+          }
+        },
+        "load_progress_failed": {
+          "message": {
+            "type": "str",
+            "source": "etl_job.load_progress_failed.message"
+          }
+        },
+        "fetch_failed": {
+          "message": {
+            "type": "str",
+            "source": "etl_job.fetch_failed.message"
+          }
+        },
+        "write_failed": {
+          "message": {
+            "type": "str",
+            "source": "etl_job.write_failed.message"
+          }
+        },
+        "push_metrics_failed": {
+          "message": {
+            "type": "str",
+            "source": "etl_job.push_metrics_failed.message"
+          }
+        }
+      }
+    }
+  }
+}
