@@ -56,9 +56,11 @@ for the full list. The most important variables:
   - Set `PROMETHEUS_INSECURE=1` to disable TLS verification;
 - `CLICKHOUSE_URL`, `CLICKHOUSE_TABLE` – ClickHouse HTTP URL and table name;
   - Optional: `CLICKHOUSE_USER` and `CLICKHOUSE_PASSWORD` for authentication;
+  - Set `CLICKHOUSE_INSECURE=1` to disable TLS verification;
 - `PUSHGATEWAY_URL`, `PUSHGATEWAY_JOB`, `PUSHGATEWAY_INSTANCE` – PushGateway
   endpoint and labels;
   - Optional: `PUSHGATEWAY_TOKEN` (Bearer) or `PUSHGATEWAY_USER`/`PUSHGATEWAY_PASS` (Basic auth);
+  - Set `PUSHGATEWAY_INSECURE=1` to disable TLS verification;
 - `BATCH_WINDOW_SECONDS` – processing window size in seconds;
 - `LOG_LEVEL` – logging level (default: `INFO`).
 

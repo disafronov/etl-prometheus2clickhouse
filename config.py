@@ -87,6 +87,10 @@ class ClickHouseConfig(BaseSettings):
             "Used for insert operations. Default is 300 seconds (5 minutes)."
         ),
     )
+    insecure: bool = Field(
+        default=False,
+        description="Disable TLS verification when true",
+    )
     table: str = Field(..., description="Target table name for inserts")
 
 
@@ -121,6 +125,10 @@ class PushGatewayConfig(BaseSettings):
     timeout: int = Field(
         default=10,
         description="HTTP request timeout in seconds for PushGateway",
+    )
+    insecure: bool = Field(
+        default=False,
+        description="Disable TLS verification when true",
     )
     job: str = Field(..., description="PushGateway job name")
     instance: str = Field(..., description="PushGateway instance name")
