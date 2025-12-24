@@ -41,12 +41,15 @@ class ClickHouseClient:
         try:
             # Type ignore: clickhouse_connect.get_client accepts None for password
             # but mypy types are too strict
+            # verify parameter controls TLS certificate verification
+            # When insecure=True, verify=False disables certificate validation
             self._client = clickhouse_connect.get_client(
                 url=config.url,
                 username=config.user,
                 password=config.password,  # type: ignore[arg-type]
                 connect_timeout=config.connect_timeout,
                 send_receive_timeout=config.send_receive_timeout,
+                verify=not config.insecure,
             )
         except Exception as exc:
             logger.error(

@@ -39,6 +39,7 @@ class PushGatewayClient:
 
         self._auth: tuple[str, str] | None = None
         self._headers: dict[str, str] = {}
+        self._verify = not config.insecure
 
         if config.token:
             self._headers["Authorization"] = f"Bearer {config.token}"
@@ -68,6 +69,7 @@ class PushGatewayClient:
                 timeout=self._timeout,
                 auth=self._auth,
                 headers=self._headers,
+                verify=self._verify,
             )
             response.raise_for_status()
         except requests.RequestException as exc:
