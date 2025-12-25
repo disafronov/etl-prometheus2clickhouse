@@ -3,7 +3,7 @@
 Configuration loading and validation.
 
 All connection settings are read from environment variables. Business state
-timestamps are stored in Prometheus metrics and are not part of this config.
+timestamps are stored in ClickHouse ETL table and are not part of this config.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ class PrometheusConfig(BaseSettings):
     """Prometheus or Mimir connection configuration.
 
     Configuration for connecting to Prometheus-compatible API. Business state
-    (timestamps) is stored in Prometheus metrics, not in this config object.
+    (timestamps) is stored in ClickHouse ETL table, not in this config object.
     """
 
     model_config = SettingsConfigDict(
@@ -195,7 +195,7 @@ def load_config() -> Config:
     Reads all configuration from environment variables and validates using
     Pydantic Settings. Each nested config uses its own env_prefix to read
     from environment variables automatically. Business state (job timestamps)
-    is not part of config - it's stored in Prometheus metrics and read at runtime.
+    is not part of config - it's stored in ClickHouse ETL table and read at runtime.
 
     Returns:
         Validated Config instance with all connection settings

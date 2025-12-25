@@ -1,8 +1,7 @@
 # etl-prometheus2clickhouse
 
 ETL job that reads metrics from Prometheus/Mimir (Prometheus-compatible API),
-writes them to ClickHouse in batches and uses PushGateway to store job
-state metrics.
+writes them to ClickHouse in batches and uses ClickHouse to store job state.
 
 ## Overview
 
@@ -14,26 +13,22 @@ The job:
   - `metric_name` (String) – metric name;
   - `labels` (String) – JSON-encoded labels;
   - `value` (Float64) – metric value;
-- uses Prometheus metrics:
-  - `etl_timestamp_start`,
-  - `etl_timestamp_end`,
-  - `etl_timestamp_progress`;
-- pushes the same timestamps and batch metadata to PushGateway:
-  - `etl_timestamp_start`,
-  - `etl_timestamp_end`,
-  - `etl_timestamp_progress`,
-  - `etl_batch_window_seconds`,
-  - `etl_batch_rows`.
+- stores job state in ClickHouse ETL table:
+  - `timestamp_progress` – current processing progress timestamp;
+  - `timestamp_start` – job start timestamp;
+  - `timestamp_end` – job completion timestamp;
+  - `batch_window_seconds` – size of processed window;
+  - `batch_rows` – number of rows processed in batch.
 
 All connection settings are provided via environment variables. Job state is
-read only from Prometheus, PushGateway is write-only.
+stored in ClickHouse ETL table.
 
-**Important:** Before the first run, the `etl_timestamp_progress` metric must be
-set in Prometheus to specify the starting point for data processing. The job
-will fail if this metric is not found.
+**Important:** Before the first run, the `timestamp_progress` value must be
+set in ClickHouse ETL table to specify the starting point for data processing.
+The job will fail if this value is not found.
 
-Note: `etl_timestamp_start` and `etl_timestamp_end` may be absent on the first
-run (they will be created automatically). Only `etl_timestamp_progress` is
+Note: `timestamp_start` and `timestamp_end` may be absent on the first
+run (they will be created automatically). Only `timestamp_progress` is
 required before the first execution.
 
 ## Requirements
@@ -59,10 +54,6 @@ for the full list. The most important variables:
   - `CLICKHOUSE_TABLE_ETL` – table name for ETL state (default: `default.etl`);
   - Optional: `CLICKHOUSE_USER` and `CLICKHOUSE_PASSWORD` for authentication;
   - Set `CLICKHOUSE_INSECURE=1` to disable TLS verification;
-- `PUSHGATEWAY_URL`, `PUSHGATEWAY_JOB`, `PUSHGATEWAY_INSTANCE` – PushGateway
-  endpoint and labels;
-  - Optional: `PUSHGATEWAY_TOKEN` (Bearer) or `PUSHGATEWAY_USER`/`PUSHGATEWAY_PASS` (Basic auth);
-  - Set `PUSHGATEWAY_INSECURE=1` to disable TLS verification;
 - `BATCH_WINDOW_SIZE_SECONDS` – processing window size in seconds;
 - `BATCH_WINDOW_OVERLAP_SECONDS` – overlap in seconds to avoid missing data at
   boundaries;
@@ -95,9 +86,9 @@ This will run the job every 10 seconds. Adjust the sleep interval as needed.
 
 ## ClickHouse Table Requirements
 
-The target ClickHouse table must be configured to handle potential duplicate
+The target ClickHouse tables must be configured to handle potential duplicate
 inserts. This is required because the job is designed to be idempotent: if
-PushGateway update fails after successful data write, the job will reprocess
+state update fails after successful data write, the job will reprocess
 the same window on the next run, which may result in duplicate rows.
 
 You can use the default database or create a custom database. To create a custom
@@ -108,7 +99,9 @@ CREATE DATABASE IF NOT EXISTS metrics;
 ```
 
 Recommended table engine: `ReplacingMergeTree` or a table with deduplication
-enabled. The table schema should match the following structure:
+enabled. The table schemas should match the following structure:
+
+Metrics table:
 
 ```sql
 CREATE TABLE default.metrics (
@@ -118,6 +111,20 @@ CREATE TABLE default.metrics (
     value Float64
 ) ENGINE = ReplacingMergeTree()
 ORDER BY (timestamp, metric_name, labels);
+```
+
+ETL state table:
+
+```sql
+CREATE TABLE default.etl (
+    timestamp_progress Nullable(Int64),
+    timestamp_start Nullable(Int64),
+    timestamp_end Nullable(Int64),
+    batch_window_seconds Nullable(Int64),
+    batch_rows Nullable(Int64),
+    updated_at DateTime DEFAULT now()
+) ENGINE = ReplacingMergeTree()
+ORDER BY updated_at;
 ```
 
 ## Logging
@@ -135,64 +142,45 @@ logging formatters. Schema is defined in `logging_objects_with_schema.json`.
 - Job cannot start on subsequent runs
 
 **Cause:**
-This happens when the job successfully marks its start (`timestamp_start` is pushed to PushGateway) but fails before completing the batch (e.g., error loading `timestamp_progress`, network failure, or application crash). The job's safety mechanism prevents concurrent runs by checking that the previous run completed.
+This happens when the job successfully marks its start (`timestamp_start` is saved to ClickHouse) but fails before completing the batch (e.g., error loading `timestamp_progress`, network failure, or application crash). The job's safety mechanism prevents concurrent runs by checking that the previous run completed.
 
 **Solution:**
-Set `etl_timestamp_end` metric in PushGateway to a value greater than `etl_timestamp_start`.
+Set `timestamp_end` value in ClickHouse ETL table to a value greater than `timestamp_start`.
 This marks the previous job as completed and allows the new job to start:
 
 ```bash
 TIMESTAMP_END=$(date +%s)
-curl -X POST http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse \
-  -d "# TYPE etl_timestamp_end gauge
-etl_timestamp_end $TIMESTAMP_END
-"
+clickhouse-client --query "INSERT INTO default.etl (timestamp_end, updated_at) VALUES ($TIMESTAMP_END, now())"
 ```
 
-If PushGateway requires authentication, add credentials:
-
-Basic Auth:
+Or using HTTP interface:
 
 ```bash
 TIMESTAMP_END=$(date +%s)
-curl -X POST -u user:password http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse \
-  -d "# TYPE etl_timestamp_end gauge
-etl_timestamp_end $TIMESTAMP_END
-"
+curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_end,updated_at)+VALUES+($TIMESTAMP_END,now())"
 ```
 
-Bearer Token:
+**Note:** After setting `timestamp_end`, the job will be able to start on the next run. The job will continue from the last
+successful `timestamp_progress` value (which is stored in ClickHouse).
 
-```bash
-TIMESTAMP_END=$(date +%s)
-curl -X POST -H "Authorization: Bearer TOKEN" http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse \
-  -d "# TYPE etl_timestamp_end gauge
-etl_timestamp_end $TIMESTAMP_END
-"
-```
-
-**Note:** After setting `timestamp_end`, wait a few seconds for Prometheus to scrape the updated
-metric from PushGateway, then the job will be able to start. The job will continue from the last
-successful `timestamp_progress` value (which is stored in Prometheus).
-
-### TimestampProgress Not Found in Prometheus
+### TimestampProgress Not Found in ClickHouse
 
 **Symptoms:**
 
-- Job logs show: "TimestampProgress metric not found in Prometheus"
-- Job fails to start with error: "TimestampProgress (etl_timestamp_progress) not found in Prometheus"
+- Job logs show: "TimestampProgress not found in ClickHouse"
+- Job fails to start with error: "TimestampProgress not found in ClickHouse"
 
 **Cause:**
 
 This happens when:
 
 - This is the first run and the job has never completed successfully (no `timestamp_progress` was ever set)
-- The `timestamp_progress` metric was deleted from PushGateway or lost from Prometheus
-- Prometheus hasn't scraped the metric from PushGateway yet
+- The `timestamp_progress` value was deleted from ClickHouse ETL table
+- The ETL table doesn't exist or is empty
 
 **Solution:**
 
-Set `etl_timestamp_progress` metric in PushGateway to the Unix timestamp from which you want to start processing.
+Set `timestamp_progress` value in ClickHouse ETL table to the Unix timestamp from which you want to start processing.
 
 Convert any date/time to Unix timestamp:
 
@@ -226,37 +214,17 @@ N days ago (macOS):
 export TIMESTAMP_PROGRESS=$(date -v-30d +%s)
 ```
 
-Set the metric:
+Set the value in ClickHouse:
 
 ```bash
-curl -X POST http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse \
-  -d "# TYPE etl_timestamp_progress gauge
-etl_timestamp_progress $TIMESTAMP_PROGRESS
-"
+clickhouse-client --query "INSERT INTO default.etl (timestamp_progress, updated_at) VALUES ($TIMESTAMP_PROGRESS, now())"
 ```
 
-If PushGateway requires authentication, add credentials:
-
-Basic Auth:
+Or using HTTP interface:
 
 ```bash
-TIMESTAMP_PROGRESS=$(date +%s)
-curl -X POST -u user:password http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse \
-  -d "# TYPE etl_timestamp_progress gauge
-etl_timestamp_progress $TIMESTAMP_PROGRESS
-"
+curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_progress,updated_at)+VALUES+($TIMESTAMP_PROGRESS,now())"
 ```
 
-Bearer Token:
-
-```bash
-TIMESTAMP_PROGRESS=$(date +%s)
-curl -X POST -H "Authorization: Bearer TOKEN" http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse \
-  -d "# TYPE etl_timestamp_progress gauge
-etl_timestamp_progress $TIMESTAMP_PROGRESS
-"
-```
-
-**Note:** After setting `timestamp_progress`, wait a few seconds for Prometheus to scrape the updated
-metric from PushGateway, then the job will be able to start. The job will process data starting from
+**Note:** After setting `timestamp_progress`, the job will be able to start on the next run. The job will process data starting from
 this timestamp.
