@@ -5,6 +5,7 @@ ClickHouse client wrapper for batch inserts.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 from urllib.parse import urlparse
 
@@ -152,8 +153,6 @@ class ClickHouseClient:
             FileNotFoundError: If file doesn't exist
             Exception: If ClickHouse insert operation fails
         """
-        import os
-
         if not os.path.exists(file_path):
             error_msg = f"File not found: {file_path}"
             logger.error(
@@ -244,6 +243,9 @@ class ClickHouseClient:
             # (allowed characters: alphanumeric, underscore, dot)
             if not all(c.isalnum() or c in ("_", ".") for c in self._table_etl):
                 raise ValueError(f"Invalid table name format: {self._table_etl}")
+            # FINAL is used to get the latest merged version from ReplacingMergeTree.
+            # This is safe for performance because only one ETL job instance writes
+            # to this table, so the table size remains small.
             query = f"""
                 SELECT
                     timestamp_progress,

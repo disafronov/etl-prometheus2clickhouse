@@ -473,8 +473,6 @@ class EtlJob:
         Raises:
             Exception: If ClickHouse insert fails
         """
-        import os
-
         # Check if file is empty (no rows to write)
         if os.path.getsize(file_path) == 0:
             logger.info("No rows to write (empty result from Prometheus)")
