@@ -122,7 +122,8 @@ CREATE TABLE default.etl (
     batch_window_seconds Nullable(Int64),
     batch_rows Nullable(Int64)
 ) ENGINE = ReplacingMergeTree()
-ORDER BY (timestamp_progress, timestamp_start, timestamp_end);
+ORDER BY (timestamp_progress, timestamp_start, timestamp_end)
+SETTINGS allow_nullable_key = 1;
 ```
 
 ## Logging
