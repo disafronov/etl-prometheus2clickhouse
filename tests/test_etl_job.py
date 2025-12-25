@@ -411,7 +411,7 @@ def test_etl_job_run_once_fails_on_fetch_error() -> None:
     with pytest.raises(Exception, match="Prometheus query_range failed"):
         job.run_once()
 
-    # Should not write or push success
+    # Should not write or save state
     assert len(ch.inserts) == 0
     # Progress should remain unchanged (initial value)
     assert ch._state["timestamp_progress"] == 1700000000
@@ -452,7 +452,7 @@ def test_etl_job_run_once_fails_on_write_error() -> None:
     with pytest.raises(Exception, match="ClickHouse insert failed"):
         job.run_once()
 
-    # Should not push success metrics
+    # Should not save state
     # Progress should remain unchanged (initial value)
     assert ch._state["timestamp_progress"] == 1700000000
 
@@ -486,8 +486,8 @@ def test_etl_job_run_once_fails_when_progress_missing() -> None:
     assert ch._state["timestamp_progress"] is None  # And no success metrics
 
 
-def test_etl_job_run_once_fails_on_push_success_error() -> None:
-    """EtlJob should raise exception if push_success fails after successful write."""
+def test_etl_job_run_once_fails_on_save_state_error() -> None:
+    """EtlJob should raise exception if save_state fails after successful write."""
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
@@ -1052,6 +1052,6 @@ def test_etl_job_run_once_handles_file_cleanup_error() -> None:
         # Job should complete successfully despite cleanup error
         job.run_once()
 
-    # Should have written data and pushed success metrics
+    # Should have written data and saved state
     assert len(ch.inserts) == 1
     assert ch._state["timestamp_progress"] is not None
