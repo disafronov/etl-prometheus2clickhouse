@@ -187,6 +187,16 @@
             "type": "int",
             "source": "clickhouse_client.insert_failed.rows_count"
           }
+        },
+        "get_state_failed": {
+          "error": {
+            "type": "str",
+            "source": "clickhouse_client.get_state_failed.error"
+          },
+          "table": {
+            "type": "str",
+            "source": "clickhouse_client.get_state_failed.table"
+          }
         }
       },
       "etl_job": {
@@ -230,6 +240,16 @@
           "message": {
             "type": "str",
             "source": "etl_job.save_metrics_failed.message"
+          }
+        },
+        "read_state_failed": {
+          "field": {
+            "type": "str",
+            "source": "etl_job.read_state_failed.field"
+          },
+          "message": {
+            "type": "str",
+            "source": "etl_job.read_state_failed.message"
           }
         },
         "invalid_value_pair": {
