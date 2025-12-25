@@ -38,7 +38,7 @@ class ClickHouseClient:
         """
         self._config = config
         self._table = config.table
-        self._state_table = config.state_table
+        self._table_state = config.table_state
 
         try:
             # Parse URL to extract host, port, and scheme
@@ -238,8 +238,8 @@ class ClickHouseClient:
             # so we validate the table name format and use f-string.
             # Format: database.table or just table
             # (allowed characters: alphanumeric, underscore, dot)
-            if not all(c.isalnum() or c in ("_", ".") for c in self._state_table):
-                raise ValueError(f"Invalid table name format: {self._state_table}")
+            if not all(c.isalnum() or c in ("_", ".") for c in self._table_state):
+                raise ValueError(f"Invalid table name format: {self._table_state}")
             query = f"""
                 SELECT
                     timestamp_progress,
@@ -247,7 +247,7 @@ class ClickHouseClient:
                     timestamp_end,
                     batch_window_seconds,
                     batch_rows
-                FROM {self._state_table}
+                FROM {self._table_state}
                 ORDER BY updated_at DESC
                 LIMIT 1
             """  # nosec B608
@@ -275,7 +275,7 @@ class ClickHouseClient:
                 "Failed to read state from ClickHouse",
                 extra={
                     "clickhouse_client.get_state_failed.error": str(exc),
-                    "clickhouse_client.get_state_failed.table": self._state_table,
+                    "clickhouse_client.get_state_failed.table": self._table_state,
                 },
             )
             raise
@@ -329,7 +329,7 @@ class ClickHouseClient:
 
             # updated_at is set by DEFAULT now()
             self._client.insert(
-                self._state_table,
+                self._table_state,
                 [values],
                 column_names=columns,
             )
@@ -338,7 +338,7 @@ class ClickHouseClient:
                 "Failed to save state to ClickHouse",
                 extra={
                     "clickhouse_client.save_state_failed.error": str(exc),
-                    "clickhouse_client.save_state_failed.table": self._state_table,
+                    "clickhouse_client.save_state_failed.table": self._table_state,
                 },
             )
             raise
