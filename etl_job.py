@@ -100,21 +100,29 @@ class EtlJob:
         )
 
         file_path, rows_count = self._fetch_data(window_start, window_end)
-        try:
-            self._ch.insert_from_file(file_path)
-            logger.info(f"Successfully wrote data to ClickHouse from file {file_path}")
-        except Exception as exc:
-            logger.error(
-                "Failed to write rows to ClickHouse",
-                extra={
-                    "etl_job.write_failed.message": str(exc),
-                    "etl_job.write_failed.file_path": file_path,
-                },
-            )
-            raise
-        finally:
-            # Always clean up temporary file, even if write fails
-            self._cleanup_temp_file(file_path)
+        if rows_count > 0:
+            try:
+                self._ch.insert_from_file(file_path)
+                logger.info(
+                    f"Successfully wrote data to ClickHouse from file {file_path}"
+                )
+            except Exception as exc:
+                logger.error(
+                    "Failed to write rows to ClickHouse",
+                    extra={
+                        "etl_job.write_failed.message": str(exc),
+                        "etl_job.write_failed.file_path": file_path,
+                    },
+                )
+                raise
+            finally:
+                # Always clean up temporary file, even if write fails
+                self._cleanup_temp_file(file_path)
+        else:
+            # No data to insert, clean up empty file if it was created
+            if file_path:
+                self._cleanup_temp_file(file_path)
+            logger.info("No data to insert, skipping ClickHouse write")
 
         # Calculate new progress, but never exceed current time to avoid going
         # into the future where Prometheus has no data yet
