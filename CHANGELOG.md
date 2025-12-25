@@ -1,3 +1,9 @@
+## [1.0.0-rc.7](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0-rc.6...v1.0.0-rc.7) (2025-12-25)
+
+### Features
+
+* enhance error handling for invalid value pairs in ETL job ([5a18b16](https://github.com/disafronov/etl-prometheus2clickhouse/commit/5a18b16559fee9fc8d56196e4d338d4017e4b667))
+
 ## [1.0.0-rc.6](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0-rc.5...v1.0.0-rc.6) (2025-12-25)
 
 ### Features
