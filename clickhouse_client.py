@@ -55,8 +55,9 @@ class ClickHouseClient:
             # Determine if connection should be secure (HTTPS)
             secure = parsed_url.scheme == "https"
 
-            # Type ignore: clickhouse_connect.get_client accepts None for password
-            # but mypy types are too strict
+            # Type ignore: clickhouse_connect.get_client accepts None and empty string
+            # for password but mypy types are too strict. Empty string "" is a valid
+            # password value (different from None which means no password).
             # verify parameter controls TLS certificate verification
             # When insecure=True, verify=False disables certificate validation
             self._client = clickhouse_connect.get_client(
