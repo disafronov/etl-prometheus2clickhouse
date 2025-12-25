@@ -305,26 +305,6 @@ class ClickHouseClient:
         if not all(c.isalnum() or c in ("_", ".") for c in table_name):
             raise ValueError(f"Invalid {field_name} format: {table_name}")
 
-    @staticmethod
-    def _validate_int_value(value: int | None, field_name: str) -> None:
-        """Validate that value is int (not None) before SQL insertion.
-
-        This prevents SQL injection even if types change in future code.
-        All values inserted into SQL queries must be validated int to ensure
-        they cannot contain SQL injection payloads.
-
-        Args:
-            value: Value to validate (must be int, not None)
-            field_name: Name of field for error message
-
-        Raises:
-            TypeError: If value is not int (None is allowed but not used in SQL)
-        """
-        if value is not None and not isinstance(value, int):
-            raise TypeError(
-                f"{field_name} must be int, got {type(value).__name__}: {value}"
-            )
-
     def save_state(
         self,
         timestamp_progress: int | None = None,
@@ -386,6 +366,11 @@ class ClickHouseClient:
 
             if not columns:
                 return  # Nothing to insert
+
+            # Table name comes from configuration, not user input.
+            # ClickHouse doesn't support parameterized table names in queries,
+            # so we validate the table name format before using it.
+            self._validate_table_name(self._table_etl, "table_etl")
 
             self._client.insert(
                 self._table_etl,
