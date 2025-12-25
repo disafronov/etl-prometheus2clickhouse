@@ -124,7 +124,7 @@ CREATE TABLE default.etl (
     batch_rows Nullable(Int64),
     updated_at DateTime DEFAULT now()
 ) ENGINE = ReplacingMergeTree()
-ORDER BY updated_at;
+ORDER BY (timestamp_progress, timestamp_start, timestamp_end);
 ```
 
 ## Logging

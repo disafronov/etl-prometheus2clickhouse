@@ -1,6 +1,6 @@
 {
   "etl-prometheus2clickhouse": {
-    "v1": {
+    "v2": {
       "main": {
         "application_error": {
           "error": {
