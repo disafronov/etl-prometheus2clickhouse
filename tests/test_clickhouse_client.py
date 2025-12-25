@@ -661,7 +661,7 @@ def test_clickhouse_client_get_state_invalid_table_name(mock_get_client: Mock) -
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_save_state_success(mock_get_client: Mock) -> None:
-    """save_state() should update state when timestamp_start is provided."""
+    """save_state() should insert state using INSERT."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
@@ -676,23 +676,23 @@ def test_clickhouse_client_save_state_success(mock_get_client: Mock) -> None:
         batch_rows=100,
     )
 
-    # When timestamp_start is provided, should use ALTER TABLE UPDATE
-    mock_client.command.assert_called_once()
-    call_args = mock_client.command.call_args[0][0]
-    assert "ALTER TABLE default.etl" in call_args
-    assert "UPDATE" in call_args
-    assert "timestamp_progress = 1700000000" in call_args
-    assert "timestamp_end = 1700000200" in call_args
-    assert "batch_window_seconds = 300" in call_args
-    assert "batch_rows = 100" in call_args
-    assert "WHERE timestamp_start = 1700000100" in call_args
-    assert "timestamp_progress IS NULL" in call_args
-    assert "timestamp_end IS NULL" in call_args
+    # Always uses INSERT (ReplacingMergeTree handles deduplication)
+    mock_client.insert.assert_called_once_with(
+        "default.etl",
+        [[1700000000, 1700000100, 1700000200, 300, 100]],
+        column_names=[
+            "timestamp_progress",
+            "timestamp_start",
+            "timestamp_end",
+            "batch_window_seconds",
+            "batch_rows",
+        ],
+    )
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_save_state_partial(mock_get_client: Mock) -> None:
-    """save_state() should update only provided fields when timestamp_start provided."""
+    """save_state() should insert only provided fields."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
@@ -704,15 +704,12 @@ def test_clickhouse_client_save_state_partial(mock_get_client: Mock) -> None:
         timestamp_start=1700000100,
     )
 
-    # When timestamp_start is provided, should use ALTER TABLE UPDATE
-    mock_client.command.assert_called_once()
-    call_args = mock_client.command.call_args[0][0]
-    assert "ALTER TABLE default.etl" in call_args
-    assert "UPDATE" in call_args
-    assert "timestamp_progress = 1700000000" in call_args
-    assert "WHERE timestamp_start = 1700000100" in call_args
-    assert "timestamp_progress IS NULL" in call_args
-    assert "timestamp_end IS NULL" in call_args
+    # Always uses INSERT with only provided fields
+    mock_client.insert.assert_called_once_with(
+        "default.etl",
+        [[1700000000, 1700000100]],
+        column_names=["timestamp_progress", "timestamp_start"],
+    )
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -819,8 +816,7 @@ def test_clickhouse_client_save_state_update_no_other_fields(
 
     client.save_state(timestamp_start=1700000100)
 
-    # Should not call UPDATE (no other fields to update), but should INSERT
-    mock_client.command.assert_not_called()
+    # Always uses INSERT
     mock_client.insert.assert_called_once_with(
         "default.etl",
         [[1700000100]],
@@ -832,7 +828,7 @@ def test_clickhouse_client_save_state_update_no_other_fields(
 def test_clickhouse_client_save_state_update_with_end_only(
     mock_get_client: Mock,
 ) -> None:
-    """save_state() should update when only timestamp_end provided."""
+    """save_state() should insert when only timestamp_end provided."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
@@ -844,19 +840,11 @@ def test_clickhouse_client_save_state_update_with_end_only(
         timestamp_end=1700000200,
     )
 
-    # When timestamp_start is provided, should use ALTER TABLE UPDATE
-    mock_client.command.assert_called_once()
-    call_args = mock_client.command.call_args[0][0]
-    assert "ALTER TABLE default.etl" in call_args
-    assert "UPDATE" in call_args
-    assert "timestamp_end = 1700000200" in call_args
-    assert "WHERE timestamp_start = 1700000100" in call_args
-    assert "timestamp_progress IS NULL" in call_args
-    assert "timestamp_end IS NULL" in call_args
-    # timestamp_progress should not be in update (it's None)
-    assert (
-        "timestamp_progress" not in call_args
-        or "timestamp_progress = None" not in call_args
+    # Always uses INSERT with only provided fields
+    mock_client.insert.assert_called_once_with(
+        "default.etl",
+        [[1700000100, 1700000200]],
+        column_names=["timestamp_start", "timestamp_end"],
     )
 
 
@@ -864,7 +852,7 @@ def test_clickhouse_client_save_state_update_with_end_only(
 def test_clickhouse_client_save_state_update_invalid_table_name(
     mock_get_client: Mock,
 ) -> None:
-    """save_state() should raise ValueError for invalid table name in UPDATE."""
+    """save_state() should raise ValueError for invalid table name."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
@@ -919,51 +907,3 @@ def test_clickhouse_client_save_state_insert_with_batch_fields(
         [[300, 100]],
         column_names=["batch_window_seconds", "batch_rows"],
     )
-
-
-@patch("clickhouse_client.clickhouse_connect.get_client")
-def test_clickhouse_client_save_state_validate_int_types(mock_get_client: Mock) -> None:
-    """save_state() should validate that all values are int before SQL construction."""
-    mock_client = Mock()
-    mock_get_client.return_value = mock_client
-
-    cfg = _make_clickhouse_config()
-    client = ClickHouseClient(cfg)
-
-    # Test with non-int value for timestamp_start
-    with pytest.raises(TypeError, match="timestamp_start must be int"):
-        client.save_state(
-            timestamp_start="not_an_int",  # type: ignore[arg-type]
-            timestamp_progress=1700000000,
-        )
-
-    # Test with non-int value for timestamp_progress
-    with pytest.raises(TypeError, match="timestamp_progress must be int"):
-        client.save_state(
-            timestamp_start=1700000100,
-            timestamp_progress="not_an_int",  # type: ignore[arg-type]
-        )
-
-    # Test with non-int value for timestamp_end
-    with pytest.raises(TypeError, match="timestamp_end must be int"):
-        client.save_state(
-            timestamp_start=1700000100,
-            timestamp_end="not_an_int",  # type: ignore[arg-type]
-        )
-
-    # Test with non-int value for batch_window_seconds
-    with pytest.raises(TypeError, match="batch_window_seconds must be int"):
-        client.save_state(
-            timestamp_start=1700000100,
-            batch_window_seconds="not_an_int",  # type: ignore[arg-type]
-        )
-
-    # Test with non-int value for batch_rows
-    with pytest.raises(TypeError, match="batch_rows must be int"):
-        client.save_state(
-            timestamp_start=1700000100,
-            batch_rows="not_an_int",  # type: ignore[arg-type]
-        )
-
-    # Verify that no SQL was executed due to validation errors
-    mock_client.command.assert_not_called()
