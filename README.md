@@ -116,13 +116,13 @@ ETL state table:
 
 ```sql
 CREATE TABLE default.etl (
-    timestamp_progress Nullable(Int64),
     timestamp_start Nullable(Int64),
     timestamp_end Nullable(Int64),
+    timestamp_progress Nullable(Int64),
     batch_window_seconds Nullable(Int64),
     batch_rows Nullable(Int64)
 ) ENGINE = ReplacingMergeTree()
-ORDER BY (timestamp_progress, timestamp_start, timestamp_end)
+ORDER BY (timestamp_start)
 SETTINGS allow_nullable_key = 1;
 ```
 
@@ -180,7 +180,10 @@ This happens when:
 
 **Solution:**
 
-Set `timestamp_progress` value in ClickHouse ETL table to the Unix timestamp from which you want to start processing.
+Set all three required fields in ClickHouse ETL table: `timestamp_start`, `timestamp_end`, and `timestamp_progress`.
+The `timestamp_start` and `timestamp_end` values are "fake" (dummy values) for initialization,
+but they must be set to satisfy state validation. Only `timestamp_progress` is the real value
+that determines the starting point for processing.
 
 Convert any date/time to Unix timestamp:
 
@@ -214,17 +217,17 @@ N days ago (macOS):
 export TIMESTAMP_PROGRESS=$(date -v-30d +%s)
 ```
 
-Set the value in ClickHouse:
+Set all three fields in ClickHouse (using dummy values for start and end):
 
 ```bash
-clickhouse-client --query "INSERT INTO default.etl (timestamp_progress) VALUES ($TIMESTAMP_PROGRESS)"
+# Use timestamp_progress as base, set start to same value, end to start + 1
+clickhouse-client --query "INSERT INTO default.etl (timestamp_start, timestamp_end, timestamp_progress) VALUES ($TIMESTAMP_PROGRESS, $((TIMESTAMP_PROGRESS + 1)), $TIMESTAMP_PROGRESS)"
 ```
 
 Or using HTTP interface:
 
 ```bash
-curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_progress)+VALUES+($TIMESTAMP_PROGRESS)"
+curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_start,timestamp_end,timestamp_progress)+VALUES+($TIMESTAMP_PROGRESS,$((TIMESTAMP_PROGRESS+1)),$TIMESTAMP_PROGRESS)"
 ```
 
-**Note:** After setting `timestamp_progress`, the job will be able to start on the next run. The job will process data starting from
-this timestamp.
+**Note:** After setting all three fields, the job will be able to start on the next run. The job will process data starting from `timestamp_progress` value. The `timestamp_start` and `timestamp_end` values are dummy values for initialization and will be replaced with real values on the first successful run.
