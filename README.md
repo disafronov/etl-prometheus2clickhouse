@@ -158,8 +158,9 @@ TIMESTAMP_END=$(date +%s)
 curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_end)+VALUES+($TIMESTAMP_END)"
 ```
 
-**Note:** After setting `timestamp_end`, the job will be able to start on the next run. The job will continue from the last
-successful `timestamp_progress` value (which is stored in ClickHouse).
+**Note:** After setting `timestamp_end`, the job will be able to pass the start check on the next run. However, if this was the first run and the job never completed successfully, `timestamp_progress` may be missing. In that case, the job will fail with "TimestampProgress not found in ClickHouse" error. You will need to set `timestamp_progress` manually as described in the "TimestampProgress Not Found in ClickHouse" section below.
+
+If there was a previous successful run, the job will continue from the last successful `timestamp_progress` value (which is stored in ClickHouse).
 
 ### TimestampProgress Not Found in ClickHouse
 
