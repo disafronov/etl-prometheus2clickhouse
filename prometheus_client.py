@@ -67,13 +67,25 @@ class PrometheusClient:
         try:
             response.raise_for_status()
         except requests.RequestException as exc:
+            # Try to get response body for better error diagnostics
+            # Limit to first 1000 chars to avoid logging huge responses
+            response_text = None
+            try:
+                response_text = response.text[:1000]
+            except Exception:  # nosec B110
+                # Ignore errors when reading response body - this is intentional
+                # as response may not be readable in all error scenarios
+                pass
+
             logger.error(
                 "Prometheus query failed",
                 extra={
                     "prometheus_client.query_failed.error": str(exc),
+                    "prometheus_client.query_failed.error_type": type(exc).__name__,
                     "prometheus_client.query_failed.expression": expression,
                     "prometheus_client.query_failed.url": response.url,
                     "prometheus_client.query_failed.status_code": response.status_code,
+                    "prometheus_client.query_failed.response_preview": response_text,
                 },
             )
             raise
@@ -122,13 +134,49 @@ class PrometheusClient:
             ValueError: If response is invalid
         """
         url = f"{self._base_url}/api/v1/query"
-        response = requests.get(
-            url,
-            params={"query": expr},
-            timeout=self._timeout,
-            auth=self._auth,
-            verify=self._verify,
-        )
+        try:
+            response = requests.get(
+                url,
+                params={"query": expr},
+                timeout=self._timeout,
+                auth=self._auth,
+                verify=self._verify,
+            )
+        except requests.Timeout as exc:
+            logger.error(
+                "Prometheus query timeout",
+                extra={
+                    "prometheus_client.query_timeout.error": str(exc),
+                    "prometheus_client.query_timeout.expression": expr,
+                    "prometheus_client.query_timeout.url": url,
+                    "prometheus_client.query_timeout.timeout": self._timeout,
+                },
+            )
+            raise
+        except requests.ConnectionError as exc:
+            logger.error(
+                "Prometheus query connection error",
+                extra={
+                    "prometheus_client.query_connection_error.error": str(exc),
+                    "prometheus_client.query_connection_error.expression": expr,
+                    "prometheus_client.query_connection_error.url": url,
+                },
+            )
+            raise
+        except requests.RequestException as exc:
+            logger.error(
+                "Prometheus query request failed",
+                extra={
+                    "prometheus_client.query_request_failed.error": str(exc),
+                    "prometheus_client.query_request_failed.error_type": type(
+                        exc
+                    ).__name__,
+                    "prometheus_client.query_request_failed.expression": expr,
+                    "prometheus_client.query_request_failed.url": url,
+                },
+            )
+            raise
+
         return self._handle_response(response, expr)
 
     def query_range(
@@ -161,11 +209,51 @@ class PrometheusClient:
             "end": end,
             "step": step,
         }
-        response = requests.get(
-            url,
-            params=params,
-            timeout=self._timeout,
-            auth=self._auth,
-            verify=self._verify,
-        )
+        try:
+            response = requests.get(
+                url,
+                params=params,
+                timeout=self._timeout,
+                auth=self._auth,
+                verify=self._verify,
+            )
+        except requests.Timeout as exc:
+            logger.error(
+                "Prometheus query_range timeout",
+                extra={
+                    "prometheus_client.query_range_timeout.error": str(exc),
+                    "prometheus_client.query_range_timeout.expression": expr,
+                    "prometheus_client.query_range_timeout.url": url,
+                    "prometheus_client.query_range_timeout.timeout": self._timeout,
+                    "prometheus_client.query_range_timeout.window_seconds": int(
+                        end - start
+                    ),
+                    "prometheus_client.query_range_timeout.step": step,
+                },
+            )
+            raise
+        except requests.ConnectionError as exc:
+            logger.error(
+                "Prometheus query_range connection error",
+                extra={
+                    "prometheus_client.query_range_connection_error.error": str(exc),
+                    "prometheus_client.query_range_connection_error.expression": expr,
+                    "prometheus_client.query_range_connection_error.url": url,
+                },
+            )
+            raise
+        except requests.RequestException as exc:
+            logger.error(
+                "Prometheus query_range request failed",
+                extra={
+                    "prometheus_client.query_range_request_failed.error": str(exc),
+                    "prometheus_client.query_range_request_failed.error_type": type(
+                        exc
+                    ).__name__,
+                    "prometheus_client.query_range_request_failed.expression": expr,
+                    "prometheus_client.query_range_request_failed.url": url,
+                },
+            )
+            raise
+
         return self._handle_response(response, expr)
