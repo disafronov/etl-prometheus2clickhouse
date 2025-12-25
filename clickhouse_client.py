@@ -222,8 +222,11 @@ class ClickHouseClient:
                 "batch_rows": int(row[4]) if row[4] is not None else None,
             }
         except Exception as exc:
+            error_msg = (
+                f"Failed to read state from ClickHouse: {type(exc).__name__}: {exc}"
+            )
             logger.error(
-                "Failed to read state from ClickHouse",
+                error_msg,
                 extra={
                     "clickhouse_client.get_state_failed.error": str(exc),
                     "clickhouse_client.get_state_failed.table": self._table_etl,

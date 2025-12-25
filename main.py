@@ -43,8 +43,9 @@ def main() -> None:
         )
         job.run_once()
     except Exception as exc:
+        error_msg = f"Application error occurred: {type(exc).__name__}: {exc}"
         logger.error(
-            "Application error occurred",
+            error_msg,
             extra={
                 "main.application_error.error": str(exc),
                 "main.application_error.error_type": type(exc).__name__,
