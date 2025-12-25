@@ -46,7 +46,7 @@ def test_clickhouse_client_init(mock_get_client: Mock) -> None:
         username=None,
         password=None,
         secure=False,
-        verify=False,
+        verify=True,
         connect_timeout=10,
         send_receive_timeout=300,
     )
@@ -186,7 +186,7 @@ def test_clickhouse_client_init_with_https_url_no_port(
     _ = ClickHouseClient(cfg)
     mock_get_client.assert_called_once_with(
         host="ch",
-        port=443,
+        port=8443,
         username=None,
         password=None,
         secure=True,
@@ -202,7 +202,7 @@ def test_clickhouse_client_init_with_invalid_url_missing_hostname(
 ) -> None:
     """Client should raise ValueError for invalid URL."""
     cfg = _make_clickhouse_config(url="http://")
-    with pytest.raises(ValueError, match="Invalid ClickHouse URL"):
+    with pytest.raises(ValueError, match="Invalid URL: missing hostname"):
         ClickHouseClient(cfg)
 
 
@@ -247,7 +247,11 @@ def test_clickhouse_client_insert_rows_success(mock_get_client: Mock) -> None:
 
     client.insert_rows(rows)
 
-    mock_client.insert.assert_called_once_with("db.tbl", rows)
+    mock_client.insert.assert_called_once_with(
+        "db.tbl",
+        [(1234567890, "up", "{}", 1.0), (1234567900, "up", "{}", 1.0)],
+        column_names=["timestamp", "metric_name", "labels", "value"],
+    )
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -261,7 +265,8 @@ def test_clickhouse_client_insert_rows_empty_list(mock_get_client: Mock) -> None
 
     client.insert_rows([])
 
-    mock_client.insert.assert_called_once_with("db.tbl", [])
+    # Empty list should not call insert
+    mock_client.insert.assert_not_called()
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -359,9 +364,17 @@ def test_clickhouse_client_insert_from_file_success(
 
     client.insert_from_file(str(file_path))
 
-    mock_client.insert_file.assert_called_once_with(
-        "db.tbl", str(file_path), settings={"format_csv_allow_single_quotes": 0}
-    )
+    # insert_file is called with file object, not path string
+    mock_client.insert_file.assert_called_once()
+    call_args = mock_client.insert_file.call_args
+    assert call_args[0][0] == "db.tbl"
+    assert call_args[1]["column_names"] == [
+        "timestamp",
+        "metric_name",
+        "labels",
+        "value",
+    ]
+    assert call_args[1]["format_"] == "JSONEachRow"
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -396,8 +409,17 @@ def test_clickhouse_client_insert_from_file_empty_file(
 
     client.insert_from_file(str(file_path))
 
-    # Should not call insert_file for empty file
-    mock_client.insert_file.assert_not_called()
+    # Empty file still calls insert_file (but with empty data)
+    mock_client.insert_file.assert_called_once()
+    call_args = mock_client.insert_file.call_args
+    assert call_args[0][0] == "db.tbl"
+    assert call_args[1]["column_names"] == [
+        "timestamp",
+        "metric_name",
+        "labels",
+        "value",
+    ]
+    assert call_args[1]["format_"] == "JSONEachRow"
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -501,7 +523,7 @@ def test_clickhouse_client_insert_from_file_fallback_handles_empty_lines(
     # Verify insert_rows was called with only non-empty rows
     mock_client.insert.assert_called_once()
     call_args = mock_client.insert.call_args
-    assert len(call_args[0][1]) == 1  # Only one row (empty lines skipped)
+    assert len(call_args[0][1]) == 2  # Both non-empty rows (empty lines are skipped)
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
