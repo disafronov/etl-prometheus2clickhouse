@@ -71,6 +71,7 @@ class DummyClickHouseClient:
             "batch_rows": None,
         }
         self._should_fail_get_state = False
+        self._should_fail_get_state_with_value_error = False
         self._should_fail_save_state = False
 
     def set_should_fail(self, should_fail: bool) -> None:
@@ -80,6 +81,10 @@ class DummyClickHouseClient:
     def set_should_fail_get_state(self, should_fail: bool) -> None:
         """Configure whether get_state should fail."""
         self._should_fail_get_state = should_fail
+
+    def set_should_fail_get_state_with_value_error(self, should_fail: bool) -> None:
+        """Configure whether get_state should fail with ValueError."""
+        self._should_fail_get_state_with_value_error = should_fail
 
     def set_should_fail_save_state(self, should_fail: bool) -> None:
         """Configure whether save_state should fail."""
@@ -130,6 +135,8 @@ class DummyClickHouseClient:
 
     def get_state(self) -> dict[str, int | None]:
         """Mock get_state method."""
+        if self._should_fail_get_state_with_value_error:
+            raise ValueError("Invalid table name")
         if self._should_fail_get_state:
             raise Exception("ClickHouse get_state failed")
         return self._state.copy()
@@ -704,6 +711,29 @@ def test_etl_job_load_progress_handles_query_exception() -> None:
         job._load_progress()
 
 
+def test_etl_job_load_progress_handles_value_error() -> None:
+    """EtlJob._load_progress should re-raise ValueError when get_state raises ValueError."""  # noqa: E501
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+
+    # Make get_state raise ValueError
+    ch.set_should_fail_get_state_with_value_error(True)
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+    )
+
+    # Mark start first (required for load_progress to be called)
+    job._mark_start(1700000000)
+
+    # Should re-raise ValueError as-is
+    with pytest.raises(ValueError, match="Invalid table name"):
+        job._load_progress()
+
+
 def test_etl_job_read_state_field_handles_missing_field() -> None:
     """EtlJob._read_state_field should return None when field is missing."""
     config = _make_config()
@@ -809,6 +839,9 @@ def test_etl_job_run_once_handles_empty_result_from_prometheus() -> None:
     # Should complete successfully even with empty result
     assert ch._state["timestamp_start"] is not None
     assert len(ch.inserts) == 0  # No rows to write
+    assert (
+        len(ch.insert_from_file_calls) == 0
+    )  # insert_from_file should not be called for empty results
     assert ch._state["timestamp_progress"] is not None
     # Progress should still advance
     assert ch._state["timestamp_progress"] == 1700000300
