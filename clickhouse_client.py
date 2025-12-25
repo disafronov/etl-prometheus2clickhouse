@@ -168,9 +168,12 @@ class ClickHouseClient:
     def get_state(self) -> dict[str, int | None]:
         """Read latest ETL state from ClickHouse.
 
-        Reads the most recent state record ordered by timestamp_progress,
-        then timestamp_start, then timestamp_end (matching table ORDER BY key).
-        Returns None for missing fields to match Prometheus behavior.
+        Reads the most recent state record ordered by timestamp_start DESC.
+        Since ORDER BY key is (timestamp_start), records with same timestamp_start
+        are merged by ReplacingMergeTree. We get the latest completed run by
+        filtering for records with timestamp_progress IS NOT NULL,
+        timestamp_end IS NOT NULL, and timestamp_end > timestamp_start
+        (completed records must have both and end must be after start).
 
         Returns:
             Dictionary with keys: timestamp_progress, timestamp_start,
@@ -191,15 +194,16 @@ class ClickHouseClient:
             # to this table, so the table size remains small.
             query = f"""
                 SELECT
-                    timestamp_progress,
                     timestamp_start,
                     timestamp_end,
+                    timestamp_progress,
                     batch_window_seconds,
                     batch_rows
                 FROM {self._table_etl} FINAL
-                ORDER BY timestamp_progress DESC NULLS LAST,
-                         timestamp_start DESC NULLS LAST,
-                         timestamp_end DESC NULLS LAST
+                WHERE timestamp_progress IS NOT NULL
+                  AND timestamp_end IS NOT NULL
+                  AND timestamp_end > timestamp_start
+                ORDER BY timestamp_start DESC
                 LIMIT 1
             """  # nosec B608
             result = self._client.query(query)
@@ -215,9 +219,9 @@ class ClickHouseClient:
 
             row = result.result_rows[0]
             return {
-                "timestamp_progress": int(row[0]) if row[0] is not None else None,
-                "timestamp_start": int(row[1]) if row[1] is not None else None,
-                "timestamp_end": int(row[2]) if row[2] is not None else None,
+                "timestamp_start": int(row[0]) if row[0] is not None else None,
+                "timestamp_end": int(row[1]) if row[1] is not None else None,
+                "timestamp_progress": int(row[2]) if row[2] is not None else None,
                 "batch_window_seconds": int(row[3]) if row[3] is not None else None,
                 "batch_rows": int(row[4]) if row[4] is not None else None,
             }
@@ -282,15 +286,20 @@ class ClickHouseClient:
         """Save ETL state in ClickHouse.
 
         Always uses INSERT to save state. ReplacingMergeTree handles
-        deduplication based on ORDER BY key (timestamp_progress, timestamp_start,
-        timestamp_end). When reading state, FINAL is used to get the latest
-        merged version after automatic merges.
+        deduplication based on ORDER BY key (timestamp_start). When reading state,
+        FINAL is used to get the latest merged version after automatic merges.
 
-        This approach is used because ClickHouse doesn't allow updating key
-        columns via ALTER TABLE UPDATE. ReplacingMergeTree automatically merges
-        rows with the same ORDER BY key, keeping the latest version.
+        This approach works because:
+        1. ClickHouse doesn't allow updating key columns via ALTER TABLE UPDATE
+        2. ReplacingMergeTree automatically merges rows with same ORDER BY key
+        3. FINAL ensures we read the latest version after merges
+        4. When _mark_start() creates record with timestamp_start, and
+           _save_state_after_success() adds other fields with same timestamp_start,
+           they will be merged into single record
 
         All fields are optional - only provided fields are saved.
+        Fields are saved in table order: timestamp_start, timestamp_end,
+        timestamp_progress, batch_window_seconds, batch_rows.
 
         Args:
             timestamp_progress: Progress timestamp (Unix timestamp in seconds, int)
@@ -305,24 +314,25 @@ class ClickHouseClient:
         try:
             # Always use INSERT instead of UPDATE.
             # ReplacingMergeTree handles deduplication based on ORDER BY key
-            # (timestamp_progress, timestamp_start, timestamp_end).
-            # When reading state, FINAL is used to get the latest merged version.
-            # This approach works because:
+            # (timestamp_start). When reading state, FINAL is used to get the
+            # latest merged version. This approach works because:
             # 1. ClickHouse doesn't allow updating key columns via ALTER TABLE UPDATE
             # 2. ReplacingMergeTree automatically merges rows with same ORDER BY key
             # 3. FINAL ensures we read the latest version after merges
             columns = []
             values = []
 
-            if timestamp_progress is not None:
-                columns.append("timestamp_progress")
-                values.append(timestamp_progress)
+            # Save fields in table order:
+            # timestamp_start, timestamp_end, timestamp_progress, ...
             if timestamp_start is not None:
                 columns.append("timestamp_start")
                 values.append(timestamp_start)
             if timestamp_end is not None:
                 columns.append("timestamp_end")
                 values.append(timestamp_end)
+            if timestamp_progress is not None:
+                columns.append("timestamp_progress")
+                values.append(timestamp_progress)
             if batch_window_seconds is not None:
                 columns.append("batch_window_seconds")
                 values.append(batch_window_seconds)

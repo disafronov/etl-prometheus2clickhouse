@@ -284,6 +284,11 @@ class EtlJob:
         attempt to auto-detect the oldest metric to avoid overloading Prometheus
         with expensive queries.
 
+        State validation is handled by get_state(), which filters for valid
+        completed records (timestamp_progress IS NOT NULL AND timestamp_end IS NOT NULL
+        AND timestamp_end > timestamp_start). If get_state() returns a record with
+        timestamp_progress, it's already valid.
+
         Returns:
             Current progress timestamp as Unix timestamp (int, seconds since epoch)
 
@@ -294,10 +299,18 @@ class EtlJob:
         try:
             progress = self._read_state_field("timestamp_progress")
             if progress is not None:
+                # get_state() already filters for valid completed records:
+                # timestamp_progress IS NOT NULL AND timestamp_end IS NOT NULL
+                # AND timestamp_end > timestamp_start.
+                # If get_state() returned a record with timestamp_progress,
+                # it's already valid. No additional validation needed.
                 logger.info(
                     f"Loaded progress timestamp: {format_timestamp_with_utc(progress)}"
                 )
                 return progress
+        except ValueError:
+            # Re-raise ValueError as-is (state validation errors)
+            raise
         except Exception as exc:
             logger.error(
                 "Failed to read TimestampProgress from ClickHouse",
@@ -532,15 +545,10 @@ class EtlJob:
         progress is not updated, but data is already in ClickHouse, so next
         run will process the same window again (idempotent behavior).
 
-        Inserts a new record with all state fields (timestamp_progress,
-        timestamp_start, timestamp_end, batch_window_seconds, batch_rows).
-        This creates a record with ORDER BY key (timestamp_progress,
-        timestamp_start, timestamp_end), which is different from the record
-        created at start with key (NULL, timestamp_start, NULL). ReplacingMergeTree
-        does not merge these records because ORDER BY keys differ. However,
-        get_state() uses ORDER BY timestamp_progress DESC NULLS LAST to retrieve
-        the record with the highest timestamp_progress, which is the correct
-        completed state record.
+        Inserts a new record with all state fields. Since ORDER BY key is
+        timestamp_start, this record will be merged with the record created
+        at start (with same timestamp_start) by ReplacingMergeTree, keeping
+        the latest version with all fields populated.
 
         Args:
             timestamp_start: Job start timestamp (same as initial start record)

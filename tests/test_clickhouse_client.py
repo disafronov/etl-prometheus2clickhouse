@@ -468,7 +468,9 @@ def test_clickhouse_client_get_state_success(mock_get_client: Mock) -> None:
     """get_state() should return state from ClickHouse."""
     mock_client = Mock()
     mock_result = Mock()
-    mock_result.result_rows = [(1700000000, 1700000100, 1700000200, 300, 100)]
+    # Order: timestamp_start, timestamp_end, timestamp_progress,
+    # batch_window_seconds, batch_rows
+    mock_result.result_rows = [(1700000100, 1700000200, 1700000000, 300, 100)]
     mock_client.query.return_value = mock_result
     mock_get_client.return_value = mock_client
 
@@ -515,7 +517,9 @@ def test_clickhouse_client_get_state_with_nulls(mock_get_client: Mock) -> None:
     """get_state() should handle NULL values correctly."""
     mock_client = Mock()
     mock_result = Mock()
-    mock_result.result_rows = [(1700000000, None, 1700000200, None, 100)]
+    # Order: timestamp_start, timestamp_end, timestamp_progress,
+    # batch_window_seconds, batch_rows
+    mock_result.result_rows = [(1700000100, None, 1700000000, None, 100)]
     mock_client.query.return_value = mock_result
     mock_get_client.return_value = mock_client
 
@@ -526,8 +530,8 @@ def test_clickhouse_client_get_state_with_nulls(mock_get_client: Mock) -> None:
 
     assert state == {
         "timestamp_progress": 1700000000,
-        "timestamp_start": None,
-        "timestamp_end": 1700000200,
+        "timestamp_start": 1700000100,
+        "timestamp_end": None,
         "batch_window_seconds": None,
         "batch_rows": 100,
     }
@@ -652,13 +656,15 @@ def test_clickhouse_client_save_state_success(mock_get_client: Mock) -> None:
     )
 
     # Always uses INSERT (ReplacingMergeTree handles deduplication)
+    # Fields saved in table order:
+    # timestamp_start, timestamp_end, timestamp_progress, ...
     mock_client.insert.assert_called_once_with(
         "default.etl",
-        [[1700000000, 1700000100, 1700000200, 300, 100]],
+        [[1700000100, 1700000200, 1700000000, 300, 100]],
         column_names=[
-            "timestamp_progress",
             "timestamp_start",
             "timestamp_end",
+            "timestamp_progress",
             "batch_window_seconds",
             "batch_rows",
         ],
@@ -680,10 +686,12 @@ def test_clickhouse_client_save_state_partial(mock_get_client: Mock) -> None:
     )
 
     # Always uses INSERT with only provided fields
+    # Fields saved in table order:
+    # timestamp_start, timestamp_end, timestamp_progress, ...
     mock_client.insert.assert_called_once_with(
         "default.etl",
-        [[1700000000, 1700000100]],
-        column_names=["timestamp_progress", "timestamp_start"],
+        [[1700000100, 1700000000]],
+        column_names=["timestamp_start", "timestamp_progress"],
     )
 
 
@@ -716,10 +724,12 @@ def test_clickhouse_client_save_state_insert_new_record(mock_get_client: Mock) -
     )
 
     # When timestamp_start is not provided, should use INSERT
+    # Fields saved in table order:
+    # timestamp_start, timestamp_end, timestamp_progress, ...
     mock_client.insert.assert_called_once_with(
         "default.etl",
-        [[1700000000, 1700000200]],
-        column_names=["timestamp_progress", "timestamp_end"],
+        [[1700000200, 1700000000]],
+        column_names=["timestamp_end", "timestamp_progress"],
     )
 
 
