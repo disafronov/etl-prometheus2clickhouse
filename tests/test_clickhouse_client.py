@@ -12,16 +12,33 @@ from clickhouse_client import ClickHouseClient
 from config import ClickHouseConfig
 
 
+def _make_clickhouse_config(**kwargs: object) -> ClickHouseConfig:
+    """Create ClickHouseConfig for tests, disabling .env file reading.
+
+    Args:
+        **kwargs: Additional config parameters to override defaults
+
+    Returns:
+        ClickHouseConfig instance with test defaults
+    """
+    defaults = {
+        "_env_file": [],  # Disable .env file reading in tests
+        "user": None,
+        "password": None,
+        "url": "http://ch:8123",
+        "table": "db.tbl",
+    }
+    defaults.update(kwargs)
+    return ClickHouseConfig(**defaults)
+
+
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_init(mock_get_client: Mock) -> None:
     """Client should be constructed with minimal config."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
-    cfg = ClickHouseConfig(
-        url="http://ch:8123",
-        table="db.tbl",
-    )
+    cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
     assert client._table == "db.tbl"
     assert client._client == mock_client
@@ -43,12 +60,7 @@ def test_clickhouse_client_init_with_auth(mock_get_client: Mock) -> None:
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
-    cfg = ClickHouseConfig(
-        url="http://ch:8123",
-        table="db.tbl",
-        user="testuser",
-        password="testpass",
-    )
+    cfg = _make_clickhouse_config(user="testuser", password="testpass")
     ClickHouseClient(cfg)
     mock_get_client.assert_called_once_with(
         host="ch",
@@ -63,17 +75,32 @@ def test_clickhouse_client_init_with_auth(mock_get_client: Mock) -> None:
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_init_with_empty_password(mock_get_client: Mock) -> None:
+    """Client should pass empty string password when explicitly set."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(user="testuser", password="")
+    ClickHouseClient(cfg)
+    mock_get_client.assert_called_once_with(
+        host="ch",
+        port=8123,
+        username="testuser",
+        password="",  # Empty string should be passed, not None
+        secure=False,
+        connect_timeout=10,
+        send_receive_timeout=300,
+        verify=True,
+    )
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_init_with_custom_timeouts(mock_get_client: Mock) -> None:
     """Client should use custom timeout values when provided."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
-    cfg = ClickHouseConfig(
-        url="http://ch:8123",
-        table="db.tbl",
-        connect_timeout=30,
-        send_receive_timeout=600,
-    )
+    cfg = _make_clickhouse_config(connect_timeout=30, send_receive_timeout=600)
     ClickHouseClient(cfg)
     mock_get_client.assert_called_once_with(
         host="ch",
@@ -93,11 +120,7 @@ def test_clickhouse_client_init_with_insecure(mock_get_client: Mock) -> None:
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
-    cfg = ClickHouseConfig(
-        url="http://ch:8123",
-        table="db.tbl",
-        insecure=True,
-    )
+    cfg = _make_clickhouse_config(insecure=True)
     ClickHouseClient(cfg)
     mock_get_client.assert_called_once_with(
         host="ch",
@@ -116,10 +139,7 @@ def test_clickhouse_client_init_connection_error(mock_get_client: Mock) -> None:
     """Client should raise exception on connection failure."""
     mock_get_client.side_effect = Exception("Connection refused")
 
-    cfg = ClickHouseConfig(
-        url="http://ch:8123",
-        table="db.tbl",
-    )
+    cfg = _make_clickhouse_config()
 
     with pytest.raises(Exception, match="Connection refused"):
         ClickHouseClient(cfg)
@@ -145,10 +165,7 @@ def test_clickhouse_client_init_connection_error_logs_details(
     logger.addHandler(handler)
 
     try:
-        cfg = ClickHouseConfig(
-            url="http://ch:8123",
-            table="db.tbl",
-        )
+        cfg = _make_clickhouse_config()
 
         with pytest.raises(Exception, match="stream closed: EOF"):
             ClickHouseClient(cfg)
@@ -167,10 +184,7 @@ def test_clickhouse_client_insert_rows_success(mock_get_client: Mock) -> None:
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
-    cfg = ClickHouseConfig(
-        url="http://ch:8123",
-        table="db.tbl",
-    )
+    cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
 
     rows = [
@@ -209,10 +223,7 @@ def test_clickhouse_client_insert_rows_empty_list(mock_get_client: Mock) -> None
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
-    cfg = ClickHouseConfig(
-        url="http://ch:8123",
-        table="db.tbl",
-    )
+    cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
 
     client.insert_rows([])
@@ -226,10 +237,7 @@ def test_clickhouse_client_insert_rows_missing_key(mock_get_client: Mock) -> Non
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
-    cfg = ClickHouseConfig(
-        url="http://ch:8123",
-        table="db.tbl",
-    )
+    cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
 
     rows = [
@@ -267,10 +275,7 @@ def test_clickhouse_client_insert_rows_missing_key_logs_details(
     logger.addHandler(handler)
 
     try:
-        cfg = ClickHouseConfig(
-            url="http://ch:8123",
-            table="db.tbl",
-        )
+        cfg = _make_clickhouse_config()
         client = ClickHouseClient(cfg)
 
         rows = [
@@ -300,10 +305,7 @@ def test_clickhouse_client_insert_rows_insert_error(mock_get_client: Mock) -> No
     mock_client.insert.side_effect = Exception("Insert failed")
     mock_get_client.return_value = mock_client
 
-    cfg = ClickHouseConfig(
-        url="http://ch:8123",
-        table="db.tbl",
-    )
+    cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
 
     rows = [
@@ -342,10 +344,7 @@ def test_clickhouse_client_insert_rows_insert_error_logs_details(
     logger.addHandler(handler)
 
     try:
-        cfg = ClickHouseConfig(
-            url="http://ch:8123",
-            table="db.tbl",
-        )
+        cfg = _make_clickhouse_config()
         client = ClickHouseClient(cfg)
 
         rows = [

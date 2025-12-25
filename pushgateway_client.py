@@ -43,7 +43,9 @@ class PushGatewayClient:
 
         if config.token:
             self._headers["Authorization"] = f"Bearer {config.token}"
-        elif config.user and config.password:
+        # Use is not None to allow empty string passwords
+        # Empty string "" is different from None for HTTP Basic Auth
+        elif config.user is not None and config.password is not None:
             self._auth = (config.user, config.password)
 
     def _push(self, metrics_lines: list[str]) -> None:
