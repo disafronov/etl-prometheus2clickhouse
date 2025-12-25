@@ -122,24 +122,39 @@ logging formatters. Schema is defined in `logging_objects_with_schema.json`.
 This happens when the job successfully marks its start (`timestamp_start` is pushed to PushGateway) but fails before completing the batch (e.g., error loading `timestamp_progress`, network failure, or application crash). The job's safety mechanism prevents concurrent runs by checking that the previous run completed.
 
 **Solution:**
-Manually delete the stuck metrics from PushGateway to allow the job to start again:
+Set `etl_timestamp_end` metric in PushGateway to a value greater than `etl_timestamp_start`.
+This marks the previous job as completed and allows the new job to start:
 
 ```bash
-# Delete metrics for the specific job and instance
-curl -X DELETE http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse
-
-# Or delete all metrics (if using default instance)
-curl -X DELETE http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse
+TIMESTAMP_END=$(date +%s)
+curl -X POST http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse \
+  -d "# TYPE etl_timestamp_end gauge
+etl_timestamp_end $TIMESTAMP_END
+"
 ```
 
 If PushGateway requires authentication, add credentials:
 
-```bash
-# With Basic Auth
-curl -X DELETE -u user:password http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse
+Basic Auth:
 
-# With Bearer Token
-curl -X DELETE -H "Authorization: Bearer TOKEN" http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse
+```bash
+TIMESTAMP_END=$(date +%s)
+curl -X POST -u user:password http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse \
+  -d "# TYPE etl_timestamp_end gauge
+etl_timestamp_end $TIMESTAMP_END
+"
 ```
 
-**Note:** After deleting metrics, the job will start from the last successful `timestamp_progress` value (which is stored in Prometheus, not PushGateway). The job will reprocess the window that was interrupted, which is safe due to idempotent design and `ReplacingMergeTree` table engine.
+Bearer Token:
+
+```bash
+TIMESTAMP_END=$(date +%s)
+curl -X POST -H "Authorization: Bearer TOKEN" http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse \
+  -d "# TYPE etl_timestamp_end gauge
+etl_timestamp_end $TIMESTAMP_END
+"
+```
+
+**Note:** After setting `timestamp_end`, wait a few seconds for Prometheus to scrape the updated
+metric from PushGateway, then the job will be able to start. The job will continue from the last
+successful `timestamp_progress` value (which is stored in Prometheus).
