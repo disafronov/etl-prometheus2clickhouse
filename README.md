@@ -158,3 +158,89 @@ etl_timestamp_end $TIMESTAMP_END
 **Note:** After setting `timestamp_end`, wait a few seconds for Prometheus to scrape the updated
 metric from PushGateway, then the job will be able to start. The job will continue from the last
 successful `timestamp_progress` value (which is stored in Prometheus).
+
+### TimestampProgress Not Found in Prometheus
+
+**Symptoms:**
+
+- Job logs show: "TimestampProgress metric not found in Prometheus"
+- Job fails to start with error: "TimestampProgress (etl_timestamp_progress) not found in Prometheus"
+
+**Cause:**
+
+This happens when:
+
+- This is the first run and the job has never completed successfully (no `timestamp_progress` was ever set)
+- The `timestamp_progress` metric was deleted from PushGateway or lost from Prometheus
+- Prometheus hasn't scraped the metric from PushGateway yet
+
+**Solution:**
+
+Set `etl_timestamp_progress` metric in PushGateway to the Unix timestamp from which you want to start processing.
+
+Convert any date/time to Unix timestamp:
+
+Current time:
+
+```bash
+export TIMESTAMP_PROGRESS=$(date +%s)
+```
+
+Specific date (Linux):
+
+```bash
+export TIMESTAMP_PROGRESS=$(date -d "2024-01-01 00:00:00" +%s)
+```
+
+Specific date (macOS):
+
+```bash
+export TIMESTAMP_PROGRESS=$(date -j -f "%Y-%m-%d %H:%M:%S" "2024-01-01 00:00:00" +%s)
+```
+
+N days ago (Linux):
+
+```bash
+export TIMESTAMP_PROGRESS=$(date -d "30 days ago" +%s)
+```
+
+N days ago (macOS):
+
+```bash
+export TIMESTAMP_PROGRESS=$(date -v-30d +%s)
+```
+
+Set the metric:
+
+```bash
+curl -X POST http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse \
+  -d "# TYPE etl_timestamp_progress gauge
+etl_timestamp_progress $TIMESTAMP_PROGRESS
+"
+```
+
+If PushGateway requires authentication, add credentials:
+
+Basic Auth:
+
+```bash
+TIMESTAMP_PROGRESS=$(date +%s)
+curl -X POST -u user:password http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse \
+  -d "# TYPE etl_timestamp_progress gauge
+etl_timestamp_progress $TIMESTAMP_PROGRESS
+"
+```
+
+Bearer Token:
+
+```bash
+TIMESTAMP_PROGRESS=$(date +%s)
+curl -X POST -H "Authorization: Bearer TOKEN" http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse \
+  -d "# TYPE etl_timestamp_progress gauge
+etl_timestamp_progress $TIMESTAMP_PROGRESS
+"
+```
+
+**Note:** After setting `timestamp_progress`, wait a few seconds for Prometheus to scrape the updated
+metric from PushGateway, then the job will be able to start. The job will process data starting from
+this timestamp.
