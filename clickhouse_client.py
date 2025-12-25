@@ -307,7 +307,8 @@ class ClickHouseClient:
         Returns:
             Dictionary with keys: timestamp_progress, timestamp_start,
             timestamp_end, batch_window_seconds, batch_rows.
-            Timestamp values are int (Unix timestamp in seconds) or None if not set.
+            All values are int or None if not set. Timestamps are Unix timestamps
+            in seconds. batch_window_seconds and batch_rows are integers.
 
         Raises:
             Exception: If query fails
@@ -349,8 +350,8 @@ class ClickHouseClient:
                 "timestamp_progress": int(row[0]) if row[0] is not None else None,
                 "timestamp_start": int(row[1]) if row[1] is not None else None,
                 "timestamp_end": int(row[2]) if row[2] is not None else None,
-                "batch_window_seconds": row[3] if row[3] is not None else None,
-                "batch_rows": row[4] if row[4] is not None else None,
+                "batch_window_seconds": int(row[3]) if row[3] is not None else None,
+                "batch_rows": int(row[4]) if row[4] is not None else None,
             }
         except Exception as exc:
             logger.error(
