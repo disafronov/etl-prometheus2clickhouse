@@ -1,3 +1,9 @@
+## [2.0.0-rc.3](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v2.0.0-rc.2...v2.0.0-rc.3) (2025-12-25)
+
+### Bug Fixes
+
+* Enhance error logging in ClickHouseClient and main application ([b288aba](https://github.com/disafronov/etl-prometheus2clickhouse/commit/b288aba2e1403e576218866a68e69cf151dc2e77))
+
 ## [2.0.0-rc.2](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v2.0.0-rc.1...v2.0.0-rc.2) (2025-12-25)
 
 ### Features
