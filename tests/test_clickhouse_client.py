@@ -379,13 +379,18 @@ def test_clickhouse_client_insert_rows_insert_error_logs_details(
     assert "Insert failed" in call_args[0][0]
 
 
+@patch("clickhouse_client.requests.post")
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_insert_from_file_success(
-    mock_get_client: Mock, tmp_path
+    mock_get_client: Mock, mock_requests_post: Mock, tmp_path
 ) -> None:
-    """insert_from_file() should insert data from file successfully."""
+    """insert_from_file() should insert data via HTTP streaming."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
+
+    mock_response = Mock()
+    mock_response.raise_for_status = Mock()
+    mock_requests_post.return_value = mock_response
 
     cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
@@ -399,22 +404,19 @@ def test_clickhouse_client_insert_from_file_success(
 
     client.insert_from_file(str(file_path))
 
-    # insert_file is called with file object, not path string
-    mock_client.insert_file.assert_called_once()
-    call_args = mock_client.insert_file.call_args
-    assert call_args[0][0] == "db.tbl"
-    assert call_args[1]["column_names"] == [
-        "timestamp",
-        "metric_name",
-        "labels",
-        "value",
-    ]
-    assert call_args[1]["format_"] == "JSONEachRow"
+    # Verify HTTP POST was called with correct parameters
+    mock_requests_post.assert_called_once()
+    call_args = mock_requests_post.call_args
+    assert call_args[0][0] == "http://ch:8123"
+    assert call_args[1]["params"]["query"] == "INSERT INTO db.tbl FORMAT JSONEachRow"
+    assert "data" in call_args[1]
+    mock_response.raise_for_status.assert_called_once()
 
 
+@patch("clickhouse_client.requests.post")
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_insert_from_file_invalid_table_name(
-    mock_get_client: Mock, tmp_path
+    mock_get_client: Mock, mock_requests_post: Mock, tmp_path
 ) -> None:
     """insert_from_file() should raise ValueError for invalid table name."""
     mock_client = Mock()
@@ -432,8 +434,8 @@ def test_clickhouse_client_insert_from_file_invalid_table_name(
     with pytest.raises(ValueError, match="Invalid table_metrics format"):
         client.insert_from_file(str(file_path))
 
-    # Verify that insert_file was not called due to validation error
-    mock_client.insert_file.assert_not_called()
+    # Verify that HTTP POST was not called due to validation error
+    mock_requests_post.assert_not_called()
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -451,14 +453,19 @@ def test_clickhouse_client_insert_from_file_not_found(
         client.insert_from_file(str(tmp_path / "nonexistent.jsonl"))
 
 
+@patch("clickhouse_client.requests.post")
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_insert_from_file_empty_file(
-    mock_get_client: Mock, tmp_path
+    mock_get_client: Mock, mock_requests_post: Mock, tmp_path
 ) -> None:
     """insert_from_file() should handle empty file."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
+    mock_response = Mock()
+    mock_response.raise_for_status = Mock()
+    mock_requests_post.return_value = mock_response
+
     cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
 
@@ -468,55 +475,21 @@ def test_clickhouse_client_insert_from_file_empty_file(
 
     client.insert_from_file(str(file_path))
 
-    # Empty file still calls insert_file (but with empty data)
-    mock_client.insert_file.assert_called_once()
-    call_args = mock_client.insert_file.call_args
-    assert call_args[0][0] == "db.tbl"
-    assert call_args[1]["column_names"] == [
-        "timestamp",
-        "metric_name",
-        "labels",
-        "value",
-    ]
-    assert call_args[1]["format_"] == "JSONEachRow"
+    # Empty file still calls HTTP POST (but with empty data)
+    mock_requests_post.assert_called_once()
+    mock_response.raise_for_status.assert_called_once()
 
 
-@patch("clickhouse_client.clickhouse_connect.get_client")
-def test_clickhouse_client_insert_from_file_fallback_when_insert_file_unavailable(
-    mock_get_client: Mock, tmp_path
-) -> None:
-    """insert_from_file() should fall back to insert_rows when insert_file unavailable."""  # noqa: E501
-    mock_client = Mock()
-    # Simulate insert_file not being available (AttributeError)
-    del mock_client.insert_file
-    mock_get_client.return_value = mock_client
-
-    cfg = _make_clickhouse_config()
-    client = ClickHouseClient(cfg)
-
-    # Create test file
-    file_path = tmp_path / "test.jsonl"
-    file_path.write_text(
-        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
-    )
-
-    client.insert_from_file(str(file_path))
-
-    # Should fall back to insert_rows
-    mock_client.insert.assert_called_once()
-    call_args = mock_client.insert.call_args
-    assert call_args[0][0] == "db.tbl"
-    assert len(call_args[0][1]) == 1
-
-
+@patch("clickhouse_client.requests.post")
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_insert_from_file_insert_error(
-    mock_get_client: Mock, tmp_path
+    mock_get_client: Mock, mock_requests_post: Mock, tmp_path
 ) -> None:
-    """insert_from_file() should raise exception on insert failure."""
+    """insert_from_file() should raise exception on HTTP POST failure."""
     mock_client = Mock()
-    mock_client.insert_file.side_effect = Exception("Insert failed")
     mock_get_client.return_value = mock_client
+
+    mock_requests_post.side_effect = Exception("HTTP request failed")
 
     cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
@@ -526,19 +499,21 @@ def test_clickhouse_client_insert_from_file_insert_error(
         '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
     )
 
-    with pytest.raises(Exception, match="Insert failed"):
+    with pytest.raises(Exception, match="HTTP request failed"):
         client.insert_from_file(str(file_path))
 
 
+@patch("clickhouse_client.requests.post")
 @patch("clickhouse_client.clickhouse_connect.get_client")
 @patch("clickhouse_client.logger")
 def test_clickhouse_client_insert_from_file_insert_error_logs_details(
-    mock_logger: Mock, mock_get_client: Mock, tmp_path
+    mock_logger: Mock, mock_get_client: Mock, mock_requests_post: Mock, tmp_path
 ) -> None:
-    """insert_from_file() should log error details on insert failure."""
+    """insert_from_file() should log error details on HTTP POST failure."""
     mock_client = Mock()
-    mock_client.insert_file.side_effect = Exception("Insert failed")
     mock_get_client.return_value = mock_client
+
+    mock_requests_post.side_effect = Exception("HTTP request failed")
 
     cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
@@ -551,248 +526,14 @@ def test_clickhouse_client_insert_from_file_insert_error_logs_details(
     with pytest.raises(Exception):
         client.insert_from_file(str(file_path))
 
-    # Check that error was logged (may be called multiple times due to
-    # validation errors)
-    assert mock_logger.error.call_count >= 1
-    error_messages = [call[0][0] for call in mock_logger.error.call_args_list]
-    assert any(
-        "Failed to insert from file using insert_file method" in msg
-        for msg in error_messages
-    )
-    assert any("Insert failed" in msg for msg in error_messages)
-
-
-@patch("clickhouse_client.clickhouse_connect.get_client")
-def test_clickhouse_client_insert_from_file_fallback_handles_empty_lines(
-    mock_get_client: Mock, tmp_path
-) -> None:
-    """insert_from_file() fallback should skip empty lines."""
-    mock_client = Mock()
-    # Simulate insert_file not being available (AttributeError)
-    del mock_client.insert_file
-    mock_get_client.return_value = mock_client
-
-    cfg = _make_clickhouse_config()
-    client = ClickHouseClient(cfg)
-
-    # Create test file with empty lines
-    file_path = tmp_path / "test.jsonl"
-    file_path.write_text(
-        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
-        "\n"  # Empty line
-        '{"timestamp": 1234567900, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
-        "\n"  # Empty line
-    )
-
-    # Should fall back to insert_rows and skip empty lines
-    client.insert_from_file(str(file_path))
-
-    # Verify insert_rows was called with only non-empty rows
-    mock_client.insert.assert_called_once()
-    call_args = mock_client.insert.call_args
-    assert len(call_args[0][1]) == 2  # Both non-empty rows (empty lines are skipped)
-
-
-@patch("clickhouse_client.clickhouse_connect.get_client")
-def test_clickhouse_client_insert_from_file_fallback_handles_empty_file(
-    mock_get_client: Mock, tmp_path
-) -> None:
-    """insert_from_file() fallback should handle empty file gracefully."""
-    mock_client = Mock()
-    # Simulate insert_file not being available (AttributeError)
-    del mock_client.insert_file
-    mock_get_client.return_value = mock_client
-
-    cfg = _make_clickhouse_config()
-    client = ClickHouseClient(cfg)
-
-    # Create empty file
-    file_path = tmp_path / "empty.jsonl"
-    file_path.touch()
-
-    # Should not call insert_rows for empty file
-    client.insert_from_file(str(file_path))
-
-    # Verify insert_rows was not called (empty file, no rows)
-    mock_client.insert.assert_not_called()
-
-
-@patch("clickhouse_client.clickhouse_connect.get_client")
-@patch("clickhouse_client.logger")
-def test_clickhouse_client_insert_from_file_fallback_warns_for_large_files(
-    mock_logger: Mock, mock_get_client: Mock, tmp_path
-) -> None:
-    """insert_from_file() fallback should warn about performance for large files."""
-    mock_client = Mock()
-    # Simulate insert_file not being available (AttributeError)
-    del mock_client.insert_file
-    mock_get_client.return_value = mock_client
-
-    cfg = _make_clickhouse_config()
-    client = ClickHouseClient(cfg)
-
-    # Create large file (>10 MB) to trigger warning
-    file_path = tmp_path / "large.jsonl"
-    # Write enough data to exceed 10 MB threshold
-    # Each line is about 80 bytes, so we need ~131073+ lines for >10 MB
-    # Use 140000 lines to ensure we exceed 10 MB threshold
-    large_content = (
-        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
-        * 140000
-    )  # noqa: E501
-    file_path.write_text(large_content)
-
-    client.insert_from_file(str(file_path))
-
-    # Verify warning was logged about large file
-    # Check all warning calls to find the performance warning
-    all_warning_messages = []
-    for call in mock_logger.warning.call_args_list:
-        if call[0] and len(call[0]) > 0:
-            msg = call[0][0]
-            # Handle tuple (multi-line string) or regular string
-            if isinstance(msg, tuple):
-                msg_str = " ".join(str(m) for m in msg)
-            else:
-                msg_str = str(msg)
-            all_warning_messages.append(msg_str)
-
-    # Find warning about large file
-    large_file_warnings = [
-        msg for msg in all_warning_messages if "Large file detected" in msg
-    ]
-    assert (
-        len(large_file_warnings) == 1
-    ), f"Expected one warning about large file, got: {all_warning_messages}"  # noqa: E501
-
-    # Verify warning contains expected fields
-    # Find the call with large file warning
-    warning_call = None
-    for call in mock_logger.warning.call_args_list:
-        if call[0] and len(call[0]) > 0:
-            msg = call[0][0]
-            msg_str = (
-                " ".join(str(m) for m in msg) if isinstance(msg, tuple) else str(msg)
-            )
-            if "Large file detected" in msg_str:
-                warning_call = call
-                break
-    assert warning_call is not None, "Could not find warning call"
-    # warning_call is a tuple (args, kwargs)
-    assert len(warning_call) == 2
-    assert "extra" in warning_call[1]
-    extra = warning_call[1]["extra"]
-    assert "clickhouse_client.insert_from_file_fallback_performance.file_path" in extra
-    assert (
-        "clickhouse_client.insert_from_file_fallback_performance.file_size_bytes"
-        in extra
-    )
-    assert "clickhouse_client.insert_from_file_fallback_performance.rows_count" in extra
-    assert (
-        extra["clickhouse_client.insert_from_file_fallback_performance.file_size_bytes"]
-        > 10 * 1024 * 1024
-    )
-
-    # Verify insert_rows was still called (fallback works)
-    mock_client.insert.assert_called_once()
-
-
-@patch("clickhouse_client.clickhouse_connect.get_client")
-@patch("clickhouse_client.logger")
-def test_clickhouse_client_insert_from_file_fallback_no_warning_for_small_files(
-    mock_logger: Mock, mock_get_client: Mock, tmp_path
-) -> None:
-    """insert_from_file() fallback should not warn for small files."""
-    mock_client = Mock()
-    # Simulate insert_file not being available (AttributeError)
-    del mock_client.insert_file
-    mock_get_client.return_value = mock_client
-
-    cfg = _make_clickhouse_config()
-    client = ClickHouseClient(cfg)
-
-    # Create small file (<10 MB) - should not trigger warning
-    file_path = tmp_path / "small.jsonl"
-    file_path.write_text(
-        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
-    )
-
-    client.insert_from_file(str(file_path))
-
-    # Verify no warning about large file was logged
-    warning_calls = [
-        call
-        for call in mock_logger.warning.call_args_list
-        if call[0] and len(call[0]) > 0 and "Large file detected" in str(call[0][0])
-    ]
-    assert len(warning_calls) == 0, "Expected no warning for small file"
-
-
-@patch("clickhouse_client.clickhouse_connect.get_client")
-@patch("clickhouse_client.logger")
-def test_clickhouse_client_insert_from_file_fallback_read_error(
-    mock_logger: Mock, mock_get_client: Mock, tmp_path
-) -> None:
-    """insert_from_file() fallback should handle file read errors."""
-    mock_client = Mock()
-    # Simulate insert_file not being available (AttributeError)
-    del mock_client.insert_file
-    mock_get_client.return_value = mock_client
-
-    cfg = _make_clickhouse_config()
-    client = ClickHouseClient(cfg)
-
-    # Create file with invalid JSON to trigger read error
-    file_path = tmp_path / "invalid.jsonl"
-    file_path.write_text("invalid json line\n")
-
-    with pytest.raises(Exception):
-        client.insert_from_file(str(file_path))
-
     # Check that error was logged
     assert mock_logger.error.call_count >= 1
     error_messages = [call[0][0] for call in mock_logger.error.call_args_list]
     assert any(
-        "Failed to read file for fallback insert" in msg for msg in error_messages
-    )
-
-
-@patch("clickhouse_client.clickhouse_connect.get_client")
-@patch("clickhouse_client.logger")
-def test_clickhouse_client_insert_from_file_fallback_insert_error(
-    mock_logger: Mock, mock_get_client: Mock, tmp_path
-) -> None:
-    """insert_from_file() fallback should handle insert_rows errors."""
-    mock_client = Mock()
-    # Simulate insert_file not being available (AttributeError)
-    del mock_client.insert_file
-    # Make insert fail to trigger fallback insert error
-    mock_client.insert.side_effect = Exception("Insert rows failed")
-    mock_get_client.return_value = mock_client
-
-    cfg = _make_clickhouse_config()
-    client = ClickHouseClient(cfg)
-
-    # Create valid file
-    file_path = tmp_path / "test.jsonl"
-    file_path.write_text(
-        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
-    )
-
-    with pytest.raises(Exception, match="Insert rows failed"):
-        client.insert_from_file(str(file_path))
-
-    # Check that error was logged
-    assert mock_logger.error.call_count >= 1
-    error_messages = [call[0][0] for call in mock_logger.error.call_args_list]
-    assert any(
-        "Failed to insert from file into ClickHouse (fallback method)" in msg
+        "Failed to insert from file into ClickHouse via HTTP streaming" in msg
         for msg in error_messages
     )
-    assert any("Insert rows failed" in msg for msg in error_messages)
-
-    # Verify insert_rows was still called (fallback works)
-    mock_client.insert.assert_called_once()
+    assert any("HTTP request failed" in msg for msg in error_messages)
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
