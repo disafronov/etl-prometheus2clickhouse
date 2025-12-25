@@ -571,6 +571,120 @@ def test_clickhouse_client_insert_from_file_fallback_handles_empty_file(
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
+@patch("clickhouse_client.logger")
+def test_clickhouse_client_insert_from_file_fallback_warns_for_large_files(
+    mock_logger: Mock, mock_get_client: Mock, tmp_path
+) -> None:
+    """insert_from_file() fallback should warn about performance for large files."""
+    mock_client = Mock()
+    # Simulate insert_file not being available (AttributeError)
+    del mock_client.insert_file
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    # Create large file (>10 MB) to trigger warning
+    file_path = tmp_path / "large.jsonl"
+    # Write enough data to exceed 10 MB threshold
+    # Each line is about 80 bytes, so we need ~131073+ lines for >10 MB
+    # Use 140000 lines to ensure we exceed 10 MB threshold
+    large_content = (
+        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+        * 140000
+    )  # noqa: E501
+    file_path.write_text(large_content)
+
+    client.insert_from_file(str(file_path))
+
+    # Verify warning was logged about large file
+    # Check all warning calls to find the performance warning
+    all_warning_messages = []
+    for call in mock_logger.warning.call_args_list:
+        if call[0] and len(call[0]) > 0:
+            msg = call[0][0]
+            # Handle tuple (multi-line string) or regular string
+            if isinstance(msg, tuple):
+                msg_str = " ".join(str(m) for m in msg)
+            else:
+                msg_str = str(msg)
+            all_warning_messages.append(msg_str)
+
+    # Find warning about large file
+    large_file_warnings = [
+        msg for msg in all_warning_messages if "Large file detected" in msg
+    ]
+    assert (
+        len(large_file_warnings) == 1
+    ), f"Expected one warning about large file, got: {all_warning_messages}"  # noqa: E501
+
+    # Verify warning contains expected fields
+    # Find the call with large file warning
+    warning_call = None
+    for call in mock_logger.warning.call_args_list:
+        if call[0] and len(call[0]) > 0:
+            msg = call[0][0]
+            msg_str = (
+                " ".join(str(m) for m in msg) if isinstance(msg, tuple) else str(msg)
+            )
+            if "Large file detected" in msg_str:
+                warning_call = call
+                break
+    assert warning_call is not None, "Could not find warning call"
+    # warning_call is a tuple (args, kwargs)
+    assert len(warning_call) == 2
+    assert "extra" in warning_call[1]
+    extra = warning_call[1]["extra"]
+    assert "clickhouse_client.insert_from_file_fallback_performance.file_path" in extra
+    assert (
+        "clickhouse_client.insert_from_file_fallback_performance.file_size_bytes"
+        in extra
+    )
+    assert "clickhouse_client.insert_from_file_fallback_performance.rows_count" in extra
+    assert (
+        extra["clickhouse_client.insert_from_file_fallback_performance.file_size_bytes"]
+        > 10 * 1024 * 1024
+    )
+
+    # Verify insert_rows was still called (fallback works)
+    mock_client.insert.assert_called_once()
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+@patch("clickhouse_client.logger")
+def test_clickhouse_client_insert_from_file_fallback_no_warning_for_small_files(
+    mock_logger: Mock, mock_get_client: Mock, tmp_path
+) -> None:
+    """insert_from_file() fallback should not warn for small files."""
+    mock_client = Mock()
+    # Simulate insert_file not being available (AttributeError)
+    del mock_client.insert_file
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    # Create small file (<10 MB) - should not trigger warning
+    file_path = tmp_path / "small.jsonl"
+    file_path.write_text(
+        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+    )
+
+    client.insert_from_file(str(file_path))
+
+    # Verify no warning about large file was logged
+    warning_calls = [
+        call
+        for call in mock_logger.warning.call_args_list
+        if call[0] and len(call[0]) > 0 and "Large file detected" in str(call[0][0])
+    ]
+    assert len(warning_calls) == 0, "Expected no warning for small file"
+
+    # Verify insert_rows was still called (fallback works)
+    mock_client.insert.assert_called_once()
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_get_state_success(mock_get_client: Mock) -> None:
     """get_state() should return state from ClickHouse."""
     mock_client = Mock()
