@@ -178,7 +178,7 @@ configs:
 
   clickhouse_init_sql:
     content: |
-      CREATE TABLE IF NOT EXISTS default.prometheus_raw (
+      CREATE TABLE IF NOT EXISTS default.metrics (
           timestamp DateTime,
           metric_name String,
           labels String,
