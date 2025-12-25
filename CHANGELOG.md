@@ -1,3 +1,9 @@
+## [2.0.0-rc.2](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v2.0.0-rc.1...v2.0.0-rc.2) (2025-12-25)
+
+### Features
+
+* Add validation for batch window size and overlap in EtlConfig ([c383941](https://github.com/disafronov/etl-prometheus2clickhouse/commit/c38394165562857bf7b696fa5f94c02f19638dda))
+
 ## [2.0.0-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.1.0-rc.2...v2.0.0-rc.1) (2025-12-25)
 
 ### ⚠ BREAKING CHANGES
