@@ -945,6 +945,8 @@ def test_clickhouse_client_save_state_success(mock_get_client: Mock) -> None:
     assert "batch_window_seconds = 300" in call_args
     assert "batch_rows = 100" in call_args
     assert "WHERE timestamp_start = 1700000100" in call_args
+    assert "timestamp_progress IS NULL" in call_args
+    assert "timestamp_end IS NULL" in call_args
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -968,6 +970,8 @@ def test_clickhouse_client_save_state_partial(mock_get_client: Mock) -> None:
     assert "UPDATE" in call_args
     assert "timestamp_progress = 1700000000" in call_args
     assert "WHERE timestamp_start = 1700000100" in call_args
+    assert "timestamp_progress IS NULL" in call_args
+    assert "timestamp_end IS NULL" in call_args
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -1106,6 +1110,8 @@ def test_clickhouse_client_save_state_update_with_end_only(
     assert "UPDATE" in call_args
     assert "timestamp_end = 1700000200" in call_args
     assert "WHERE timestamp_start = 1700000100" in call_args
+    assert "timestamp_progress IS NULL" in call_args
+    assert "timestamp_end IS NULL" in call_args
     # timestamp_progress should not be in update (it's None)
     assert (
         "timestamp_progress" not in call_args

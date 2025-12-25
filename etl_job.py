@@ -547,8 +547,9 @@ class EtlJob:
         progress is not updated, but data is already in ClickHouse, so next
         run will process the same window again (idempotent behavior).
 
-        Uses the same timestamp_start as the initial start record to update
-        the same row in ReplacingMergeTree (ORDER BY timestamp_start).
+        Updates the record that was created at start (with only timestamp_start
+        and NULL in other fields) by matching timestamp_start and checking that
+        timestamp_progress or timestamp_end is NULL.
 
         Args:
             timestamp_start: Job start timestamp (same as initial start record)
