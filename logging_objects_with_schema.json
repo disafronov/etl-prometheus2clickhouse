@@ -23,6 +23,10 @@
             "type": "str",
             "source": "prometheus_client.query_failed.error"
           },
+          "error_type": {
+            "type": "str",
+            "source": "prometheus_client.query_failed.error_type"
+          },
           "expression": {
             "type": "str",
             "source": "prometheus_client.query_failed.expression"
@@ -34,6 +38,118 @@
           "status_code": {
             "type": "int",
             "source": "prometheus_client.query_failed.status_code"
+          },
+          "response_preview": {
+            "type": "str",
+            "source": "prometheus_client.query_failed.response_preview"
+          }
+        },
+        "query_timeout": {
+          "error": {
+            "type": "str",
+            "source": "prometheus_client.query_timeout.error"
+          },
+          "expression": {
+            "type": "str",
+            "source": "prometheus_client.query_timeout.expression"
+          },
+          "url": {
+            "type": "str",
+            "source": "prometheus_client.query_timeout.url"
+          },
+          "timeout": {
+            "type": "int",
+            "source": "prometheus_client.query_timeout.timeout"
+          }
+        },
+        "query_connection_error": {
+          "error": {
+            "type": "str",
+            "source": "prometheus_client.query_connection_error.error"
+          },
+          "expression": {
+            "type": "str",
+            "source": "prometheus_client.query_connection_error.expression"
+          },
+          "url": {
+            "type": "str",
+            "source": "prometheus_client.query_connection_error.url"
+          }
+        },
+        "query_request_failed": {
+          "error": {
+            "type": "str",
+            "source": "prometheus_client.query_request_failed.error"
+          },
+          "error_type": {
+            "type": "str",
+            "source": "prometheus_client.query_request_failed.error_type"
+          },
+          "expression": {
+            "type": "str",
+            "source": "prometheus_client.query_request_failed.expression"
+          },
+          "url": {
+            "type": "str",
+            "source": "prometheus_client.query_request_failed.url"
+          }
+        },
+        "query_range_timeout": {
+          "error": {
+            "type": "str",
+            "source": "prometheus_client.query_range_timeout.error"
+          },
+          "expression": {
+            "type": "str",
+            "source": "prometheus_client.query_range_timeout.expression"
+          },
+          "url": {
+            "type": "str",
+            "source": "prometheus_client.query_range_timeout.url"
+          },
+          "timeout": {
+            "type": "int",
+            "source": "prometheus_client.query_range_timeout.timeout"
+          },
+          "window_seconds": {
+            "type": "int",
+            "source": "prometheus_client.query_range_timeout.window_seconds"
+          },
+          "step": {
+            "type": "str",
+            "source": "prometheus_client.query_range_timeout.step"
+          }
+        },
+        "query_range_connection_error": {
+          "error": {
+            "type": "str",
+            "source": "prometheus_client.query_range_connection_error.error"
+          },
+          "expression": {
+            "type": "str",
+            "source": "prometheus_client.query_range_connection_error.expression"
+          },
+          "url": {
+            "type": "str",
+            "source": "prometheus_client.query_range_connection_error.url"
+          }
+        },
+        "query_range_request_failed": {
+          "error": {
+            "type": "str",
+            "source": "prometheus_client.query_range_request_failed.error"
+          },
+          "error_type": {
+            "type": "str",
+            "source": "prometheus_client.query_range_request_failed.error_type"
+          },
+          "expression": {
+            "type": "str",
+            "source": "prometheus_client.query_range_request_failed.expression"
+          },
+          "url": {
+            "type": "str",
+            "source": "prometheus_client.query_range_request_failed.url"
           }
         },
         "invalid_response": {
