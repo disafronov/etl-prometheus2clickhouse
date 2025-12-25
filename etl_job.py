@@ -122,7 +122,7 @@ class EtlJob:
         # TimestampEnd must never equal TimestampStart.
         timestamp_end = max(current_time, timestamp_start + 1)
 
-        self._push_metrics_after_success(
+        self._save_state_after_success(
             timestamp_start=timestamp_start,
             timestamp_end=timestamp_end,
             timestamp_progress=new_progress,
@@ -532,7 +532,7 @@ class EtlJob:
         """
         return json.dumps(labels, separators=(",", ":"))
 
-    def _push_metrics_after_success(
+    def _save_state_after_success(
         self,
         timestamp_start: int,
         timestamp_end: int,
@@ -540,7 +540,7 @@ class EtlJob:
         window_seconds: int,
         rows_count: int,
     ) -> None:
-        """Save progress and batch metrics to ClickHouse.
+        """Save progress and batch state to ClickHouse.
 
         Updates job state only after successful data write. This ensures
         progress advances only when data is actually persisted. If this fails,
