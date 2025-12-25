@@ -225,7 +225,7 @@ class ClickHouseClient:
     def get_state(self) -> dict[str, int | None]:
         """Read latest ETL state from ClickHouse.
 
-        Reads the most recent state record ordered by updated_at.
+        Reads the most recent state record ordered by progress, then timestamps.
         Returns None for missing fields to match Prometheus behavior.
 
         Returns:
@@ -252,7 +252,10 @@ class ClickHouseClient:
                     batch_window_seconds,
                     batch_rows
                 FROM {self._table_etl}
-                ORDER BY updated_at DESC
+                ORDER BY
+                    timestamp_progress DESC NULLS LAST,
+                    timestamp_start DESC NULLS LAST,
+                    timestamp_end DESC NULLS LAST
                 LIMIT 1
             """  # nosec B608
             result = self._client.query(query)
