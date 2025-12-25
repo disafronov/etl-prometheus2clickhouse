@@ -412,7 +412,7 @@ def test_etl_job_run_once_fails_on_fetch_error() -> None:
 
 
 def test_etl_job_run_once_fails_on_write_error() -> None:
-    """EtlJob should raise exception if write_rows fails."""
+    """EtlJob should raise exception if insert_from_file fails."""
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
