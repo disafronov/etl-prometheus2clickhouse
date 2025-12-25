@@ -570,3 +570,61 @@ def test_clickhouse_client_insert_from_file_insert_error(
 
     with pytest.raises(Exception, match="Insert failed"):
         client.insert_from_file(str(file_path))
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_insert_from_file_fallback_handles_empty_lines(
+    mock_get_client: Mock, tmp_path
+) -> None:
+    """insert_from_file() fallback should skip empty lines."""
+    mock_client = Mock()
+    # Simulate insert_file not being available (AttributeError)
+    del mock_client.insert_file
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    # Create temporary JSONL file with empty lines
+    file_path = tmp_path / "test.jsonl"
+    json_line = (
+        '{"timestamp":1700000000,"metric_name":"up",'
+        '"labels":"{\\"instance\\":\\"localhost\\"}","value":1.0}\n'
+    )
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write("\n")  # Empty line
+        f.write(json_line)
+        f.write("\n")  # Empty line
+        f.write("   \n")  # Whitespace-only line
+
+    # Should fall back to insert_rows and skip empty lines
+    client.insert_from_file(str(file_path))
+
+    # Verify insert_rows was called with only non-empty rows
+    mock_client.insert.assert_called_once()
+    call_args = mock_client.insert.call_args
+    assert len(call_args[0][1]) == 1  # Only one row (empty lines skipped)
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_insert_from_file_fallback_handles_empty_file(
+    mock_get_client: Mock, tmp_path
+) -> None:
+    """insert_from_file() fallback should handle empty file gracefully."""
+    mock_client = Mock()
+    # Simulate insert_file not being available (AttributeError)
+    del mock_client.insert_file
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    # Create empty file
+    file_path = tmp_path / "empty.jsonl"
+    file_path.touch()
+
+    # Should not call insert_rows for empty file
+    client.insert_from_file(str(file_path))
+
+    # Verify insert_rows was not called (empty file, no rows)
+    mock_client.insert.assert_not_called()

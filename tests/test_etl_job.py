@@ -1033,3 +1033,180 @@ def test_etl_job_calc_window_without_overlap() -> None:
     assert window_end == 1300.0  # 1000 + 300
     # Window size should be exactly window_size
     assert window_end - window_start == 300.0
+
+
+def test_etl_job_fetch_data_handles_file_write_error() -> None:
+    """EtlJob._fetch_data should handle file write errors and clean up file."""
+    from unittest.mock import patch
+
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+    pg = DummyPushGatewayClient()
+
+    prom.set_query_response(
+        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
+    )
+    prom.set_query_response(
+        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
+    )
+    prom.set_query_response(
+        "etl_timestamp_progress",
+        {
+            "status": "success",
+            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
+        },
+    )
+
+    # Mock query_range response with data
+    prom.set_query_range_response(
+        {
+            "status": "success",
+            "data": {
+                "result": [
+                    {
+                        "metric": {"__name__": "up"},
+                        "values": [[1700000000, "1"]],
+                    }
+                ]
+            },
+        }
+    )
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+        pushgateway_client=pg,
+    )
+
+    # Mock os.fdopen to raise exception during file write
+    with patch("etl_job.os.fdopen", side_effect=OSError("Disk full")):
+        with pytest.raises(OSError, match="Disk full"):
+            job._fetch_data(1700000000.0, 1700000300.0)
+
+
+def test_etl_job_fetch_data_handles_file_cleanup_error_on_write_error() -> None:
+    """EtlJob._fetch_data should handle cleanup errors when file write fails."""
+    from unittest.mock import MagicMock, patch
+
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+    pg = DummyPushGatewayClient()
+
+    prom.set_query_response(
+        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
+    )
+    prom.set_query_response(
+        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
+    )
+    prom.set_query_response(
+        "etl_timestamp_progress",
+        {
+            "status": "success",
+            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
+        },
+    )
+
+    # Mock query_range response with data
+    prom.set_query_range_response(
+        {
+            "status": "success",
+            "data": {
+                "result": [
+                    {
+                        "metric": {"__name__": "up"},
+                        "values": [[1700000000, "1"]],
+                    }
+                ]
+            },
+        }
+    )
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+        pushgateway_client=pg,
+    )
+
+    # Mock file object that raises error on write
+    mock_file = MagicMock()
+    mock_file.write.side_effect = OSError("Disk full")
+    mock_file.__enter__ = MagicMock(return_value=mock_file)
+    mock_file.__exit__ = MagicMock(return_value=False)
+
+    # Mock tempfile.mkstemp to return a file descriptor and path
+    import tempfile
+
+    temp_dir = tempfile.gettempdir()
+    fd = 123  # Dummy file descriptor
+    file_path = f"{temp_dir}/etl_batch_test.jsonl"
+
+    # Mock os.fdopen to return file that fails on write
+    # and os.unlink to fail during cleanup (to test nested exception handling)
+    with (
+        patch("etl_job.tempfile.mkstemp", return_value=(fd, file_path)),
+        patch("etl_job.os.fdopen", return_value=mock_file),
+        patch("etl_job.os.unlink", side_effect=OSError("Permission denied")),
+    ):
+        # Should raise original write error, not cleanup error
+        # Cleanup error should be silently ignored (lines 441-443)
+        with pytest.raises(OSError, match="Disk full"):
+            job._fetch_data(1700000000.0, 1700000300.0)
+
+
+def test_etl_job_run_once_handles_file_cleanup_error() -> None:
+    """EtlJob.run_once should handle file cleanup errors gracefully."""
+    from unittest.mock import patch
+
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+    pg = DummyPushGatewayClient()
+
+    prom.set_query_response(
+        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
+    )
+    prom.set_query_response(
+        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
+    )
+    prom.set_query_response(
+        "etl_timestamp_progress",
+        {
+            "status": "success",
+            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
+        },
+    )
+
+    prom.set_query_range_response(
+        {
+            "status": "success",
+            "data": {
+                "result": [
+                    {
+                        "metric": {"__name__": "up"},
+                        "values": [[1700000000, "1"]],
+                    }
+                ]
+            },
+        }
+    )
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+        pushgateway_client=pg,
+    )
+
+    # Mock os.unlink to raise exception during cleanup
+    # This should not prevent job from completing successfully
+    with patch("etl_job.os.unlink", side_effect=OSError("Permission denied")):
+        # Job should complete successfully despite cleanup error
+        job.run_once()
+
+    # Should have written data and pushed success metrics
+    assert len(ch.inserts) == 1
+    assert len(pg.success_calls) == 1
