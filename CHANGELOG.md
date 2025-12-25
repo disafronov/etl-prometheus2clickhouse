@@ -1,3 +1,9 @@
+## [3.0.0-rc.2](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.0.0-rc.1...v3.0.0-rc.2) (2025-12-25)
+
+### Features
+
+* enhance ClickHouse table definitions with ZSTD compression ([48c149f](https://github.com/disafronov/etl-prometheus2clickhouse/commit/48c149f58fe837d5005acd80cd11440bfe0bca7e))
+
 ## [2.0.0-rc.5](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v2.0.0-rc.4...v2.0.0-rc.5) (2025-12-25)
 
 ### ⚠ BREAKING CHANGES
