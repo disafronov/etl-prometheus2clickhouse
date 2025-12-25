@@ -1,6 +1,6 @@
 {
   "etl-prometheus2clickhouse": {
-    "v3": {
+    "v4": {
       "main": {
         "application_error": {
           "error": {
@@ -198,16 +198,6 @@
             "source": "clickhouse_client.get_state_failed.table"
           }
         },
-        "insert_from_file_warning": {
-          "method": {
-            "type": "str",
-            "source": "clickhouse_client.insert_from_file_method"
-          },
-          "file_path": {
-            "type": "str",
-            "source": "clickhouse_client.insert_from_file_failed.file_path"
-          }
-        },
         "insert_from_file_failed": {
           "error": {
             "type": "str",
@@ -220,20 +210,6 @@
           "table": {
             "type": "str",
             "source": "clickhouse_client.insert_from_file_failed.table"
-          }
-        },
-        "insert_from_file_fallback_performance": {
-          "file_path": {
-            "type": "str",
-            "source": "clickhouse_client.insert_from_file_fallback_performance.file_path"
-          },
-          "file_size_bytes": {
-            "type": "int",
-            "source": "clickhouse_client.insert_from_file_fallback_performance.file_size_bytes"
-          },
-          "rows_count": {
-            "type": "int",
-            "source": "clickhouse_client.insert_from_file_fallback_performance.rows_count"
           }
         },
         "save_state_failed": {
