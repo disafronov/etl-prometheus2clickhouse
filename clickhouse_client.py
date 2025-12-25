@@ -409,115 +409,65 @@ class ClickHouseClient:
         batch_window_seconds: int | None = None,
         batch_rows: int | None = None,
     ) -> None:
-        """Save or update ETL state in ClickHouse.
+        """Save ETL state in ClickHouse.
 
-        If timestamp_start is provided and there are other fields to update,
-        updates existing record with that timestamp_start that was created at
-        the start (has NULL in other fields). Otherwise, inserts new record.
-        All fields are optional - only provided fields are saved/updated.
+        Always uses INSERT to save state. ReplacingMergeTree handles
+        deduplication based on ORDER BY key (timestamp_progress, timestamp_start,
+        timestamp_end). When reading state, FINAL is used to get the latest
+        merged version after automatic merges.
+
+        This approach is used because ClickHouse doesn't allow updating key
+        columns via ALTER TABLE UPDATE. ReplacingMergeTree automatically merges
+        rows with the same ORDER BY key, keeping the latest version.
+
+        All fields are optional - only provided fields are saved.
 
         Args:
             timestamp_progress: Progress timestamp (Unix timestamp in seconds, int)
-            timestamp_start: Start timestamp (Unix timestamp in seconds, int).
-                If provided along with other fields, updates existing record
-                that was created at start (with NULL in other fields).
+            timestamp_start: Start timestamp (Unix timestamp in seconds, int)
             timestamp_end: End timestamp (Unix timestamp in seconds, int)
             batch_window_seconds: Window size in seconds
             batch_rows: Number of rows processed
 
         Raises:
-            Exception: If insert or update fails
+            Exception: If insert fails
         """
         try:
-            # Check if we should update existing record
-            # Update if timestamp_start is provided AND there are other fields to update
-            other_fields = [
-                timestamp_progress,
-                timestamp_end,
-                batch_window_seconds,
-                batch_rows,
-            ]
-            has_other_fields = any(f is not None for f in other_fields)
+            # Always use INSERT instead of UPDATE.
+            # ReplacingMergeTree handles deduplication based on ORDER BY key
+            # (timestamp_progress, timestamp_start, timestamp_end).
+            # When reading state, FINAL is used to get the latest merged version.
+            # This approach works because:
+            # 1. ClickHouse doesn't allow updating key columns via ALTER TABLE UPDATE
+            # 2. ReplacingMergeTree automatically merges rows with same ORDER BY key
+            # 3. FINAL ensures we read the latest version after merges
+            columns = []
+            values = []
 
-            if timestamp_start is not None and has_other_fields:
-                # Update existing record by timestamp_start that was created at start
-                # (has NULL in timestamp_progress or timestamp_end).
-                # This ensures we update only the "start" record,
-                # not old completed records.
-                # has_other_fields guarantees at least one field is not None,
-                # so updates will never be empty
-                # Validate all values are int before SQL construction to prevent
-                # SQL injection. This is critical security measure even though
-                # types guarantee int
-                self._validate_int_value(timestamp_start, "timestamp_start")
-                if timestamp_progress is not None:
-                    self._validate_int_value(timestamp_progress, "timestamp_progress")
-                if timestamp_end is not None:
-                    self._validate_int_value(timestamp_end, "timestamp_end")
-                if batch_window_seconds is not None:
-                    self._validate_int_value(
-                        batch_window_seconds, "batch_window_seconds"
-                    )
-                if batch_rows is not None:
-                    self._validate_int_value(batch_rows, "batch_rows")
+            if timestamp_progress is not None:
+                columns.append("timestamp_progress")
+                values.append(timestamp_progress)
+            if timestamp_start is not None:
+                columns.append("timestamp_start")
+                values.append(timestamp_start)
+            if timestamp_end is not None:
+                columns.append("timestamp_end")
+                values.append(timestamp_end)
+            if batch_window_seconds is not None:
+                columns.append("batch_window_seconds")
+                values.append(batch_window_seconds)
+            if batch_rows is not None:
+                columns.append("batch_rows")
+                values.append(batch_rows)
 
-                # Now safe to construct SQL - all values are validated int
-                updates = []
-                if timestamp_progress is not None:
-                    updates.append(f"timestamp_progress = {timestamp_progress}")
-                if timestamp_end is not None:
-                    updates.append(f"timestamp_end = {timestamp_end}")
-                if batch_window_seconds is not None:
-                    updates.append(f"batch_window_seconds = {batch_window_seconds}")
-                if batch_rows is not None:
-                    updates.append(f"batch_rows = {batch_rows}")
+            if not columns:
+                return  # Nothing to insert
 
-                # Table name comes from configuration, not user input.
-                # ClickHouse doesn't support parameterized table names in queries,
-                # so we validate the table name format and use f-string.
-                self._validate_table_name(self._table_etl, "table_etl")
-                # Update only the record that was created at start (has NULL in
-                # both timestamp_progress and timestamp_end). Both fields are NULL
-                # in the initial record and are filled simultaneously.
-                # This ensures we update the correct "start" record,
-                # not old completed records.
-                query = f"""
-                    ALTER TABLE {self._table_etl}
-                    UPDATE {', '.join(updates)}
-                    WHERE timestamp_start = {timestamp_start}
-                      AND timestamp_progress IS NULL
-                      AND timestamp_end IS NULL
-                """  # nosec B608
-                self._client.command(query)
-            else:
-                # Insert new record
-                columns = []
-                values = []
-
-                if timestamp_progress is not None:
-                    columns.append("timestamp_progress")
-                    values.append(timestamp_progress)
-                if timestamp_start is not None:
-                    columns.append("timestamp_start")
-                    values.append(timestamp_start)
-                if timestamp_end is not None:
-                    columns.append("timestamp_end")
-                    values.append(timestamp_end)
-                if batch_window_seconds is not None:
-                    columns.append("batch_window_seconds")
-                    values.append(batch_window_seconds)
-                if batch_rows is not None:
-                    columns.append("batch_rows")
-                    values.append(batch_rows)
-
-                if not columns:
-                    return  # Nothing to insert
-
-                self._client.insert(
-                    self._table_etl,
-                    [values],
-                    column_names=columns,
-                )
+            self._client.insert(
+                self._table_etl,
+                [values],
+                column_names=columns,
+            )
         except Exception as exc:
             logger.error(
                 "Failed to save state to ClickHouse",
