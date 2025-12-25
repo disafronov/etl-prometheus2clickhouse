@@ -105,12 +105,6 @@ class DummyClickHouseClient:
         if batch_rows is not None:
             self._state["batch_rows"] = batch_rows
 
-    def insert_rows(self, rows: list[dict[str, Any]]) -> None:
-        """Mock insert_rows method."""
-        if self._should_fail:
-            raise Exception("ClickHouse insert failed")
-        self.inserts.append(rows)
-
     def insert_from_file(self, file_path: str) -> None:
         """Mock insert_from_file method."""
         if self._should_fail:
