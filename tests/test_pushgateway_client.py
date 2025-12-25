@@ -114,7 +114,9 @@ def test_pushgateway_client_push_start_success(mock_post: Mock) -> None:
     assert "/metrics/job/test_job/instance/test_instance" in mock_post.call_args[0][0]
     body = call_kwargs["data"]
     assert "etl_timestamp_start" in body
-    assert "1700000000.0" in body
+    # Timestamp should be converted to integer (no decimal point)
+    assert "1700000000" in body
+    assert "1700000000.0" not in body
 
 
 @patch("pushgateway_client.requests.post")
@@ -141,8 +143,11 @@ def test_pushgateway_client_push_success_metrics(mock_post: Mock) -> None:
     assert "etl_timestamp_progress" in body
     assert "etl_batch_window_seconds" in body
     assert "etl_batch_rows" in body
-    assert "1700000300.0" in body
-    assert "1700000600.0" in body
+    # Timestamps should be converted to integers (no decimal point)
+    assert "1700000300" in body
+    assert "1700000600" in body
+    assert "1700000300.0" not in body
+    assert "1700000600.0" not in body
     assert "300" in body
     assert "42" in body
 
