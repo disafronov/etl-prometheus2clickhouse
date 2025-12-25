@@ -1,3 +1,14 @@
+## [1.0.0-rc.10](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0-rc.9...v1.0.0-rc.10) (2025-12-25)
+
+### Features
+
+* introduce batch window overlap configuration for ETL job ([3c5f7be](https://github.com/disafronov/etl-prometheus2clickhouse/commit/3c5f7be0773156b188b73c6c1330659cd4a367dc))
+
+### Bug Fixes
+
+* correct variable reference in ETL progress logging within Docker Compose ([f00c6d8](https://github.com/disafronov/etl-prometheus2clickhouse/commit/f00c6d8363b84540671e7114c16cf37f1e485ebf))
+* improve progress calculation and logging in ETL job ([d2405c1](https://github.com/disafronov/etl-prometheus2clickhouse/commit/d2405c186b18a8e94942fe58f94aabacbf2d70dc))
+
 ## [1.0.0-rc.9](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0-rc.8...v1.0.0-rc.9) (2025-12-25)
 
 ### Features
