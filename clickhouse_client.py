@@ -103,10 +103,7 @@ class ClickHouseClient:
         # Table name comes from configuration, not user input.
         # ClickHouse doesn't support parameterized table names in queries,
         # so we validate the table name format before using it.
-        # Format: database.table or just table
-        # (allowed characters: alphanumeric, underscore, dot)
-        if not all(c.isalnum() or c in ("_", ".") for c in self._table_metrics):
-            raise ValueError(f"Invalid table name format: {self._table_metrics}")
+        self._validate_table_name(self._table_metrics, "table_metrics")
 
         try:
             # Expect rows with keys: timestamp, metric_name, labels, value
@@ -178,10 +175,7 @@ class ClickHouseClient:
         # Table name comes from configuration, not user input.
         # ClickHouse doesn't support parameterized table names in queries,
         # so we validate the table name format before using it.
-        # Format: database.table or just table
-        # (allowed characters: alphanumeric, underscore, dot)
-        if not all(c.isalnum() or c in ("_", ".") for c in self._table_metrics):
-            raise ValueError(f"Invalid table name format: {self._table_metrics}")
+        self._validate_table_name(self._table_metrics, "table_metrics")
 
         try:
             # Use insert_file method if available, otherwise fall back to raw_query
@@ -279,10 +273,7 @@ class ClickHouseClient:
             # Table name comes from configuration, not user input.
             # ClickHouse doesn't support parameterized table names in queries,
             # so we validate the table name format and use f-string.
-            # Format: database.table or just table
-            # (allowed characters: alphanumeric, underscore, dot)
-            if not all(c.isalnum() or c in ("_", ".") for c in self._table_etl):
-                raise ValueError(f"Invalid table name format: {self._table_etl}")
+            self._validate_table_name(self._table_etl, "table_etl")
             # FINAL is used to get the latest merged version from ReplacingMergeTree.
             # This is safe for performance because only one ETL job instance writes
             # to this table, so the table size remains small.
@@ -327,6 +318,24 @@ class ClickHouseClient:
                 },
             )
             raise
+
+    @staticmethod
+    def _validate_table_name(table_name: str, field_name: str) -> None:
+        """Validate table name format to prevent SQL injection.
+
+        ClickHouse doesn't support parameterized table names in queries,
+        so we validate the table name format. Only alphanumeric characters,
+        underscores, and dots are allowed (standard ClickHouse identifier format).
+
+        Args:
+            table_name: Table name to validate
+            field_name: Name of field for error message
+
+        Raises:
+            ValueError: If table name contains invalid characters
+        """
+        if not all(c.isalnum() or c in ("_", ".") for c in table_name):
+            raise ValueError(f"Invalid {field_name} format: {table_name}")
 
     @staticmethod
     def _validate_int_value(value: int | None, field_name: str) -> None:
@@ -418,10 +427,7 @@ class ClickHouseClient:
                 # Table name comes from configuration, not user input.
                 # ClickHouse doesn't support parameterized table names in queries,
                 # so we validate the table name format and use f-string.
-                # Format: database.table or just table
-                # (allowed characters: alphanumeric, underscore, dot)
-                if not all(c.isalnum() or c in ("_", ".") for c in self._table_etl):
-                    raise ValueError(f"Invalid table name format: {self._table_etl}")
+                self._validate_table_name(self._table_etl, "table_etl")
                 query = f"""
                     ALTER TABLE {self._table_etl}
                     UPDATE {', '.join(updates)}
