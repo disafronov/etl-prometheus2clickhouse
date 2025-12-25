@@ -100,7 +100,7 @@ class PushGatewayClient:
         """
         lines = [
             "# TYPE etl_timestamp_start gauge",
-            f"etl_timestamp_start {timestamp_start}",
+            f"etl_timestamp_start {int(timestamp_start)}",
         ]
         self._push(lines)
 
@@ -132,9 +132,9 @@ class PushGatewayClient:
         """
         lines = [
             "# TYPE etl_timestamp_end gauge",
-            f"etl_timestamp_end {timestamp_end}",
+            f"etl_timestamp_end {int(timestamp_end)}",
             "# TYPE etl_timestamp_progress gauge",
-            f"etl_timestamp_progress {timestamp_progress}",
+            f"etl_timestamp_progress {int(timestamp_progress)}",
             "# TYPE etl_batch_window_seconds gauge",
             f"etl_batch_window_seconds {window_seconds}",
             "# TYPE etl_batch_rows gauge",
