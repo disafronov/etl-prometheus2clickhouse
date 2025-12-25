@@ -45,8 +45,8 @@ class DummyPromClient:
     def query_range(
         self,
         expr: str,
-        start: float,
-        end: float,
+        start: int,
+        end: int,
         step: str,
     ) -> dict[str, Any]:
         """Mock query_range method."""

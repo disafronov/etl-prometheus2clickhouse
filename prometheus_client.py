@@ -179,9 +179,7 @@ class PrometheusClient:
 
         return self._handle_response(response, expr)
 
-    def query_range(
-        self, expr: str, start: float, end: float, step: str
-    ) -> dict[str, Any]:
+    def query_range(self, expr: str, start: int, end: int, step: str) -> dict[str, Any]:
         """Execute range query.
 
         Performs Prometheus range query (time series over time range). Used
@@ -190,8 +188,8 @@ class PrometheusClient:
 
         Args:
             expr: PromQL expression to execute
-            start: Start timestamp (Unix timestamp)
-            end: End timestamp (Unix timestamp)
+            start: Start timestamp (Unix timestamp in seconds, int)
+            end: End timestamp (Unix timestamp in seconds, int)
             step: Resolution step (e.g., "300s", "1d")
 
         Returns:
@@ -202,8 +200,8 @@ class PrometheusClient:
             ValueError: If response is invalid
         """
         url = f"{self._base_url}/api/v1/query_range"
-        # requests.get accepts float values in params dict, so we use str | float union
-        params: dict[str, str | float] = {
+        # requests.get accepts int values in params dict
+        params: dict[str, str | int] = {
             "query": expr,
             "start": start,
             "end": end,
