@@ -162,7 +162,7 @@ class EtlJob:
 
             # Start exists but end doesn't - previous job is still running
             if ts_start is not None and ts_end is None:
-                logger.info(
+                logger.warning(
                     (
                         "Previous job is still running "
                         "(TimestampStart exists but TimestampEnd is missing), "
@@ -180,7 +180,7 @@ class EtlJob:
             # Both exist - check their relationship
             # Explicit None checks ensure both values are not None before comparison
             if ts_end is not None and ts_start is not None and ts_end < ts_start:
-                logger.info(
+                logger.warning(
                     "Previous job is still running or ended incorrectly, skipping run",
                     extra={
                         "etl_job.check_start_failed.message": (
