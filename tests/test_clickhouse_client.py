@@ -708,7 +708,7 @@ def test_clickhouse_client_save_state_success(mock_get_client: Mock) -> None:
     )
 
     mock_client.insert.assert_called_once_with(
-        "metrics.etl_state",
+        "default.etl",
         [[1700000000, 1700000100, 1700000200, 300, 100]],
         column_names=[
             "timestamp_progress",
@@ -735,7 +735,7 @@ def test_clickhouse_client_save_state_partial(mock_get_client: Mock) -> None:
     )
 
     mock_client.insert.assert_called_once_with(
-        "metrics.etl_state",
+        "default.etl",
         [[1700000000, 1700000100]],
         column_names=["timestamp_progress", "timestamp_start"],
     )

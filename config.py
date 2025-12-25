@@ -111,9 +111,12 @@ class ClickHouseConfig(BaseSettings):
         default=False,
         description="Disable TLS verification when true",
     )
-    table: str = Field(..., description="Target table name for inserts")
+    table: str = Field(
+        default="default.metrics",
+        description="Target table name for inserts",
+    )
     state_table: str = Field(
-        default="metrics.etl_state",
+        default="default.etl",
         description="Table name for storing ETL job state",
     )
 

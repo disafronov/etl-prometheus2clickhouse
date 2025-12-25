@@ -115,3 +115,30 @@ def test_prometheus_config_keeps_none_password_when_no_user(monkeypatch) -> None
 
     # Password should remain None when no user is specified
     assert cfg.password is None
+
+
+def test_clickhouse_config_has_default_table(monkeypatch) -> None:
+    """ClickHouseConfig should have default table name when not specified."""
+    from config import ClickHouseConfig
+
+    cfg = ClickHouseConfig(
+        _env_file=[],  # Disable .env file reading
+        url="http://ch:8123",
+    )
+
+    # Table should have default value
+    assert cfg.table == "default.metrics"
+
+
+def test_clickhouse_config_has_default_state_table(monkeypatch) -> None:
+    """ClickHouseConfig should have default state_table name when not specified."""
+    from config import ClickHouseConfig
+
+    cfg = ClickHouseConfig(
+        _env_file=[],  # Disable .env file reading
+        url="http://ch:8123",
+        table="db.tbl",
+    )
+
+    # State table should have default value
+    assert cfg.state_table == "default.etl"
