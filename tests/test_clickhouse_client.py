@@ -95,6 +95,35 @@ def test_clickhouse_client_init_with_empty_password(mock_get_client: Mock) -> No
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_init_with_user_but_no_password(
+    mock_get_client: Mock,
+) -> None:
+    """Client should normalize None password to empty string when user is specified.
+
+    This handles the case when CLICKHOUSE_PASSWORD is set to empty string
+    in environment variables and env_ignore_empty=True converts it to None.
+    ClickHouse requires explicit authentication even with empty password.
+    """
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(user="default", password=None)
+    # Password should be normalized to empty string by validator
+    assert cfg.password == ""
+    ClickHouseClient(cfg)
+    mock_get_client.assert_called_once_with(
+        host="ch",
+        port=8123,
+        username="default",
+        password="",  # Normalized from None to empty string
+        secure=False,
+        connect_timeout=10,
+        send_receive_timeout=300,
+        verify=True,
+    )
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_init_with_custom_timeouts(mock_get_client: Mock) -> None:
     """Client should use custom timeout values when provided."""
     mock_client = Mock()

@@ -8,7 +8,7 @@ timestamps are stored in Prometheus metrics and are not part of this config.
 
 from __future__ import annotations
 
-from pydantic import AliasChoices, BaseModel, Field, ValidationError
+from pydantic import AliasChoices, BaseModel, Field, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from logging_config import getLogger
@@ -27,8 +27,7 @@ class PrometheusConfig(BaseSettings):
         env_prefix="PROMETHEUS_",
         case_sensitive=False,
         extra="ignore",
-        # Removed env_ignore_empty=True to allow empty string passwords
-        # Empty string "" is different from None for HTTP Basic Auth
+        env_ignore_empty=True,
     )
 
     url: str = Field(..., description="Base URL of Prometheus/Mimir")
@@ -68,8 +67,7 @@ class ClickHouseConfig(BaseSettings):
         env_prefix="CLICKHOUSE_",
         case_sensitive=False,
         extra="ignore",
-        # Removed env_ignore_empty=True to allow empty string passwords
-        # Empty string "" is different from None for ClickHouse authentication
+        env_ignore_empty=True,
     )
 
     url: str = Field(..., description="Base URL of ClickHouse HTTP interface")
@@ -95,6 +93,26 @@ class ClickHouseConfig(BaseSettings):
     )
     table: str = Field(..., description="Target table name for inserts")
 
+    @model_validator(mode="after")
+    def normalize_password(self) -> ClickHouseConfig:
+        """Normalize password: if user is specified but password is None,
+        convert password to empty string.
+
+        This handles the case when CLICKHOUSE_PASSWORD is set to empty string
+        in environment variables. With env_ignore_empty=True, empty strings
+        are converted to None, but ClickHouse requires explicit authentication
+        even with empty password when user is specified.
+
+        Returns:
+            Self with normalized password field
+        """
+        if self.user is not None and self.password is None:
+            # This is not a hardcoded password, but normalization of empty
+            # password value. Empty string is required for ClickHouse
+            # authentication when password is empty but user is specified.
+            self.password = ""  # nosec B105
+        return self
+
 
 class PushGatewayConfig(BaseSettings):
     """PushGateway connection configuration.
@@ -107,8 +125,7 @@ class PushGatewayConfig(BaseSettings):
         env_prefix="PUSHGATEWAY_",
         case_sensitive=False,
         extra="ignore",
-        # Removed env_ignore_empty=True to allow empty string passwords
-        # Empty string "" is different from None for HTTP Basic Auth
+        env_ignore_empty=True,
     )
 
     url: str = Field(..., description="Base URL of PushGateway")

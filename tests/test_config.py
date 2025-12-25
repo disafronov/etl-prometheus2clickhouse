@@ -53,3 +53,40 @@ def test_load_config_validation_error_missing_required_field(monkeypatch) -> Non
 
     with pytest.raises(ValueError, match="Configuration validation failed"):
         load_config()
+
+
+def test_clickhouse_config_normalizes_password_when_user_specified(monkeypatch) -> None:
+    """ClickHouseConfig should normalize None password to empty string when user is set.
+
+    This handles the case when CLICKHOUSE_PASSWORD is set to empty string
+    in environment variables and env_ignore_empty=True converts it to None.
+    """
+    from config import ClickHouseConfig
+
+    # Simulate env_ignore_empty=True behavior: empty string becomes None
+    cfg = ClickHouseConfig(
+        _env_file=[],  # Disable .env file reading
+        url="http://ch:8123",
+        table="db.tbl",
+        user="default",
+        password=None,  # This should be normalized to ""
+    )
+
+    # Password should be normalized to empty string by validator
+    assert cfg.password == ""
+
+
+def test_clickhouse_config_keeps_none_password_when_no_user(monkeypatch) -> None:
+    """ClickHouseConfig should keep None password when no user is specified."""
+    from config import ClickHouseConfig
+
+    cfg = ClickHouseConfig(
+        _env_file=[],  # Disable .env file reading
+        url="http://ch:8123",
+        table="db.tbl",
+        user=None,
+        password=None,
+    )
+
+    # Password should remain None when no user is specified
+    assert cfg.password is None
