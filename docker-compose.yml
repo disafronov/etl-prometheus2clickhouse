@@ -111,11 +111,6 @@ configs:
           monitor: 'etl-prometheus2clickhouse'
 
       scrape_configs:
-        - job_name: 'pushgateway'
-          static_configs:
-            - targets: ['pushgateway:9091']
-          honor_labels: true
-
         - job_name: 'prometheus'
           static_configs:
             - targets: ['localhost:9090']
