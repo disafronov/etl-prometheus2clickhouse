@@ -101,11 +101,7 @@ class EtlJob:
             self._write_rows(file_path)
         finally:
             # Always clean up temporary file, even if write fails
-            try:
-                os.unlink(file_path)
-            except Exception:  # nosec B110
-                # Ignore cleanup errors (file may not exist or already deleted)
-                pass
+            self._cleanup_temp_file(file_path)
 
         # Calculate new progress, but never exceed current time to avoid going
         # into the future where Prometheus has no data yet
@@ -378,20 +374,12 @@ class EtlJob:
                 },
             )
             # Create empty file to maintain consistent interface
-            temp_dir = Path(self._config.etl.temp_dir)
-            temp_dir.mkdir(parents=True, exist_ok=True)
-            fd, file_path = tempfile.mkstemp(
-                suffix=".jsonl", dir=temp_dir, prefix="etl_batch_"
-            )
+            fd, file_path = self._create_temp_file()
             os.close(fd)
             return file_path, 0
 
         # Create temporary file for streaming write
-        temp_dir = Path(self._config.etl.temp_dir)
-        temp_dir.mkdir(parents=True, exist_ok=True)
-        fd, file_path = tempfile.mkstemp(
-            suffix=".jsonl", dir=temp_dir, prefix="etl_batch_"
-        )
+        fd, file_path = self._create_temp_file()
 
         rows_count = 0
         try:
@@ -441,11 +429,7 @@ class EtlJob:
                         rows_count += 1
         except Exception as exc:
             # Clean up file on error
-            try:
-                os.unlink(file_path)
-            except Exception:  # nosec B110
-                # Ignore cleanup errors
-                pass
+            self._cleanup_temp_file(file_path)
             logger.error(
                 "Failed to write data to temporary file",
                 extra={
@@ -498,6 +482,39 @@ class EtlJob:
                 },
             )
             raise
+
+    def _create_temp_file(self) -> tuple[int, str]:
+        """Create temporary file for ETL batch data.
+
+        Creates a temporary JSONL file in the configured temp directory.
+        Ensures the directory exists before creating the file.
+
+        Returns:
+            Tuple of (file_descriptor, file_path) where file_descriptor can be
+            used with os.fdopen() and file_path is the absolute path to the file
+        """
+        temp_dir = Path(self._config.etl.temp_dir)
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        fd, file_path = tempfile.mkstemp(
+            suffix=".jsonl", dir=temp_dir, prefix="etl_batch_"
+        )
+        return fd, file_path
+
+    @staticmethod
+    def _cleanup_temp_file(file_path: str) -> None:
+        """Clean up temporary file, ignoring errors.
+
+        Removes temporary file if it exists. All errors during cleanup are
+        silently ignored to prevent cleanup errors from masking original errors.
+
+        Args:
+            file_path: Path to temporary file to remove
+        """
+        try:
+            os.unlink(file_path)
+        except Exception:  # nosec B110
+            # Ignore cleanup errors (file may not exist or already deleted)
+            pass
 
     @staticmethod
     def _serialize_labels(labels: dict[str, Any]) -> str:
