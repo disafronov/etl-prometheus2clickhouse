@@ -231,7 +231,7 @@ def test_etl_job_run_once_success() -> None:
 
 
 def test_etl_job_run_once_cannot_start_when_end_less_than_start() -> None:
-    """EtlJob should not start when TimestampEnd < TimestampStart."""
+    """EtlJob should raise RuntimeError when TimestampEnd < TimestampStart."""
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
@@ -246,7 +246,8 @@ def test_etl_job_run_once_cannot_start_when_end_less_than_start() -> None:
         clickhouse_client=ch,
     )
 
-    job.run_once()
+    with pytest.raises(RuntimeError, match="Job cannot start"):
+        job.run_once()
 
     # Should not proceed - state should remain unchanged
     assert ch._state["timestamp_start"] == 1700000100  # Unchanged
@@ -293,7 +294,8 @@ def test_etl_job_run_once_can_start_when_end_exists_but_start_missing() -> None:
 
 
 def test_etl_job_run_once_cannot_start_when_start_exists_but_end_missing() -> None:
-    """EtlJob should not start when TimestampStart exists but TimestampEnd missing."""
+    """EtlJob should raise RuntimeError when TimestampStart exists but
+    TimestampEnd missing."""
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
@@ -308,7 +310,8 @@ def test_etl_job_run_once_cannot_start_when_start_exists_but_end_missing() -> No
         clickhouse_client=ch,
     )
 
-    job.run_once()
+    with pytest.raises(RuntimeError, match="Job cannot start"):
+        job.run_once()
 
     # Should not proceed - state should remain unchanged
     assert ch._state["timestamp_start"] == 1700000000  # Unchanged
@@ -355,7 +358,7 @@ def test_etl_job_run_once_can_start_when_no_previous_run() -> None:
 
 
 def test_etl_job_run_once_fails_on_mark_start_error() -> None:
-    """EtlJob should stop if push_start fails."""
+    """EtlJob should raise RuntimeError if push_start fails."""
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
@@ -373,7 +376,8 @@ def test_etl_job_run_once_fails_on_mark_start_error() -> None:
         clickhouse_client=ch,
     )
 
-    job.run_once()
+    with pytest.raises(RuntimeError, match="Job cannot start"):
+        job.run_once()
 
     # Should not proceed after failed start
     assert len(ch.inserts) == 0
