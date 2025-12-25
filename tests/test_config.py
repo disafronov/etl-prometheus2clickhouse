@@ -130,8 +130,8 @@ def test_clickhouse_config_has_default_table(monkeypatch) -> None:
     assert cfg.table == "default.metrics"
 
 
-def test_clickhouse_config_has_default_state_table(monkeypatch) -> None:
-    """ClickHouseConfig should have default state_table name when not specified."""
+def test_clickhouse_config_has_default_table_state(monkeypatch) -> None:
+    """ClickHouseConfig should have default table_state name when not specified."""
     from config import ClickHouseConfig
 
     cfg = ClickHouseConfig(
@@ -141,4 +141,4 @@ def test_clickhouse_config_has_default_state_table(monkeypatch) -> None:
     )
 
     # State table should have default value
-    assert cfg.state_table == "default.etl"
+    assert cfg.table_state == "default.etl"
