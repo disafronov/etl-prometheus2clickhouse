@@ -49,9 +49,9 @@ services:
         TIMESTAMP_PROGRESS=$(date +%s)
         curl -s -X POST http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse \
           -d "# TYPE etl_timestamp_progress gauge
-        etl_timestamp_progress $TIMESTAMP_PROGRESS
+        etl_timestamp_progress $$TIMESTAMP_PROGRESS
         "
-        echo "ETL progress initialized with timestamp: $TIMESTAMP_PROGRESS"
+        echo "ETL progress initialized with timestamp: $$TIMESTAMP_PROGRESS"
 
   prometheus:
     image: prom/prometheus:latest
