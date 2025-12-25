@@ -183,3 +183,139 @@ def test_prometheus_client_query_non_dict_response(mock_get: Mock) -> None:
 
     with pytest.raises(ValueError, match="invalid response format"):
         client.query("up")
+
+
+@patch("prometheus_client.requests.get")
+@patch("prometheus_client.logger")
+def test_prometheus_client_query_timeout(mock_logger: Mock, mock_get: Mock) -> None:
+    """query() should log and re-raise Timeout exception."""
+    config = _make_prometheus_config()
+    client = PrometheusClient(config)
+
+    mock_get.side_effect = requests.Timeout("Request timeout")
+
+    with pytest.raises(requests.Timeout, match="Request timeout"):
+        client.query("up")
+
+    # Check that error was logged
+    mock_logger.error.assert_called_once()
+    call_args = mock_logger.error.call_args
+    assert "Prometheus query timeout" in call_args[0][0]
+    assert call_args[1]["extra"]["prometheus_client.query_timeout.error"] == (
+        "Request timeout"
+    )
+
+
+@patch("prometheus_client.requests.get")
+@patch("prometheus_client.logger")
+def test_prometheus_client_query_connection_error(
+    mock_logger: Mock, mock_get: Mock
+) -> None:
+    """query() should log and re-raise ConnectionError exception."""
+    config = _make_prometheus_config()
+    client = PrometheusClient(config)
+
+    mock_get.side_effect = requests.ConnectionError("Connection failed")
+
+    with pytest.raises(requests.ConnectionError, match="Connection failed"):
+        client.query("up")
+
+    # Check that error was logged
+    mock_logger.error.assert_called_once()
+    call_args = mock_logger.error.call_args
+    assert "Prometheus query connection error" in call_args[0][0]
+    assert call_args[1]["extra"]["prometheus_client.query_connection_error.error"] == (
+        "Connection failed"
+    )
+
+
+@patch("prometheus_client.requests.get")
+@patch("prometheus_client.logger")
+def test_prometheus_client_query_request_exception(
+    mock_logger: Mock, mock_get: Mock
+) -> None:
+    """query() should log and re-raise RequestException exception."""
+    config = _make_prometheus_config()
+    client = PrometheusClient(config)
+
+    mock_get.side_effect = requests.RequestException("Request failed")
+
+    with pytest.raises(requests.RequestException, match="Request failed"):
+        client.query("up")
+
+    # Check that error was logged
+    mock_logger.error.assert_called_once()
+    call_args = mock_logger.error.call_args
+    assert "Prometheus query request failed" in call_args[0][0]
+    assert call_args[1]["extra"]["prometheus_client.query_request_failed.error"] == (
+        "Request failed"
+    )
+
+
+@patch("prometheus_client.requests.get")
+@patch("prometheus_client.logger")
+def test_prometheus_client_query_range_timeout(
+    mock_logger: Mock, mock_get: Mock
+) -> None:
+    """query_range() should log and re-raise Timeout exception."""
+    config = _make_prometheus_config()
+    client = PrometheusClient(config)
+
+    mock_get.side_effect = requests.Timeout("Request timeout")
+
+    with pytest.raises(requests.Timeout, match="Request timeout"):
+        client.query_range("up", start=1700000000, end=1700000300, step="300s")
+
+    # Check that error was logged
+    mock_logger.error.assert_called_once()
+    call_args = mock_logger.error.call_args
+    assert "Prometheus query_range timeout" in call_args[0][0]
+    assert call_args[1]["extra"]["prometheus_client.query_range_timeout.error"] == (
+        "Request timeout"
+    )
+
+
+@patch("prometheus_client.requests.get")
+@patch("prometheus_client.logger")
+def test_prometheus_client_query_range_connection_error(
+    mock_logger: Mock, mock_get: Mock
+) -> None:
+    """query_range() should log and re-raise ConnectionError exception."""
+    config = _make_prometheus_config()
+    client = PrometheusClient(config)
+
+    mock_get.side_effect = requests.ConnectionError("Connection failed")
+
+    with pytest.raises(requests.ConnectionError, match="Connection failed"):
+        client.query_range("up", start=1700000000, end=1700000300, step="300s")
+
+    # Check that error was logged
+    mock_logger.error.assert_called_once()
+    call_args = mock_logger.error.call_args
+    assert "Prometheus query_range connection error" in call_args[0][0]
+    assert call_args[1]["extra"][
+        "prometheus_client.query_range_connection_error.error"
+    ] == ("Connection failed")
+
+
+@patch("prometheus_client.requests.get")
+@patch("prometheus_client.logger")
+def test_prometheus_client_query_range_request_exception(
+    mock_logger: Mock, mock_get: Mock
+) -> None:
+    """query_range() should log and re-raise RequestException exception."""
+    config = _make_prometheus_config()
+    client = PrometheusClient(config)
+
+    mock_get.side_effect = requests.RequestException("Request failed")
+
+    with pytest.raises(requests.RequestException, match="Request failed"):
+        client.query_range("up", start=1700000000, end=1700000300, step="300s")
+
+    # Check that error was logged
+    mock_logger.error.assert_called_once()
+    call_args = mock_logger.error.call_args
+    assert "Prometheus query_range request failed" in call_args[0][0]
+    assert call_args[1]["extra"][
+        "prometheus_client.query_range_request_failed.error"
+    ] == ("Request failed")

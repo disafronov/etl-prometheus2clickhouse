@@ -85,6 +85,26 @@ class DummyClickHouseClient:
         """Configure whether save_state should fail."""
         self._should_fail_save_state = should_fail
 
+    def set_state(
+        self,
+        timestamp_progress: int | None = None,
+        timestamp_start: int | None = None,
+        timestamp_end: int | None = None,
+        batch_window_seconds: int | None = None,
+        batch_rows: int | None = None,
+    ) -> None:
+        """Set state directly for testing purposes."""
+        if timestamp_progress is not None:
+            self._state["timestamp_progress"] = timestamp_progress
+        if timestamp_start is not None:
+            self._state["timestamp_start"] = timestamp_start
+        if timestamp_end is not None:
+            self._state["timestamp_end"] = timestamp_end
+        if batch_window_seconds is not None:
+            self._state["batch_window_seconds"] = batch_window_seconds
+        if batch_rows is not None:
+            self._state["batch_rows"] = batch_rows
+
     def insert_rows(self, rows: list[dict[str, Any]]) -> None:
         """Mock insert_rows method."""
         if self._should_fail:
@@ -611,6 +631,56 @@ def test_etl_job_check_can_start_handles_query_exception() -> None:
     # which is caught in _check_can_start and returns False
     result = job._check_can_start()
     assert result is False
+
+
+def test_etl_job_check_can_start_when_both_timestamps_exist_and_end_greater_than_start() -> (  # noqa: E501
+    None
+):
+    """EtlJob._check_can_start should return True when both timestamps exist and end >= start."""  # noqa: E501
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+
+    # Set both timestamps with end > start (previous job completed)
+    ch.set_state(
+        timestamp_start=1700000000,
+        timestamp_end=1700000300,
+    )
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+    )
+
+    # Should return True when end > start (previous job completed)
+    result = job._check_can_start()
+    assert result is True
+
+
+def test_etl_job_check_can_start_when_both_timestamps_exist_and_end_equals_start() -> (
+    None
+):  # noqa: E501
+    """EtlJob._check_can_start should return True when both timestamps exist and end == start."""  # noqa: E501
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+
+    # Set both timestamps with end == start
+    ch.set_state(
+        timestamp_start=1700000000,
+        timestamp_end=1700000000,
+    )
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+    )
+
+    # Should return True when end == start
+    result = job._check_can_start()
+    assert result is True
 
 
 def test_etl_job_load_progress_handles_query_exception() -> None:
