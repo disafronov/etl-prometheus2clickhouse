@@ -121,8 +121,7 @@ CREATE TABLE default.etl (
     timestamp_start Nullable(Int64),
     timestamp_end Nullable(Int64),
     batch_window_seconds Nullable(Int64),
-    batch_rows Nullable(Int64),
-    updated_at DateTime DEFAULT now()
+    batch_rows Nullable(Int64)
 ) ENGINE = ReplacingMergeTree()
 ORDER BY (timestamp_progress, timestamp_start, timestamp_end);
 ```
@@ -150,14 +149,14 @@ This marks the previous job as completed and allows the new job to start:
 
 ```bash
 TIMESTAMP_END=$(date +%s)
-clickhouse-client --query "INSERT INTO default.etl (timestamp_end, updated_at) VALUES ($TIMESTAMP_END, now())"
+clickhouse-client --query "INSERT INTO default.etl (timestamp_end) VALUES ($TIMESTAMP_END)"
 ```
 
 Or using HTTP interface:
 
 ```bash
 TIMESTAMP_END=$(date +%s)
-curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_end,updated_at)+VALUES+($TIMESTAMP_END,now())"
+curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_end)+VALUES+($TIMESTAMP_END)"
 ```
 
 **Note:** After setting `timestamp_end`, the job will be able to start on the next run. The job will continue from the last
@@ -217,13 +216,13 @@ export TIMESTAMP_PROGRESS=$(date -v-30d +%s)
 Set the value in ClickHouse:
 
 ```bash
-clickhouse-client --query "INSERT INTO default.etl (timestamp_progress, updated_at) VALUES ($TIMESTAMP_PROGRESS, now())"
+clickhouse-client --query "INSERT INTO default.etl (timestamp_progress) VALUES ($TIMESTAMP_PROGRESS)"
 ```
 
 Or using HTTP interface:
 
 ```bash
-curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_progress,updated_at)+VALUES+($TIMESTAMP_PROGRESS,now())"
+curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_progress)+VALUES+($TIMESTAMP_PROGRESS)"
 ```
 
 **Note:** After setting `timestamp_progress`, the job will be able to start on the next run. The job will process data starting from
