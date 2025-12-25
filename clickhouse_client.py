@@ -196,6 +196,7 @@ class ClickHouseClient:
             # This is less efficient but works when insert_file is unavailable
             import json
 
+            file_size = os.path.getsize(file_path)
             rows: list[dict[str, Any]] = []
             with open(file_path, "r", encoding="utf-8") as f:
                 for line in f:
@@ -204,6 +205,29 @@ class ClickHouseClient:
                         continue
                     row = json.loads(line)
                     rows.append(row)
+
+            # Warn about performance impact for large files when using fallback
+            # Fallback loads entire file into memory, which can be problematic
+            # for very large files
+            if file_size > 10 * 1024 * 1024:  # 10 MB threshold
+                logger.warning(
+                    (
+                        "Large file detected in fallback mode: file will be loaded "
+                        "entirely into memory. This may cause performance issues. "
+                        "Consider upgrading clickhouse-connect to use insert_file."
+                    ),
+                    extra={
+                        "clickhouse_client.insert_from_file_fallback_performance.file_path": (  # noqa: E501
+                            file_path
+                        ),
+                        "clickhouse_client.insert_from_file_fallback_performance.file_size_bytes": (  # noqa: E501
+                            file_size
+                        ),
+                        "clickhouse_client.insert_from_file_fallback_performance.rows_count": (  # noqa: E501
+                            len(rows)
+                        ),
+                    },
+                )
 
             if rows:
                 self.insert_rows(rows)
