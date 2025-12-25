@@ -1,3 +1,13 @@
+## [1.0.0-rc.8](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0-rc.7...v1.0.0-rc.8) (2025-12-25)
+
+### Features
+
+* add Docker Compose configuration for ClickHouse, Prometheus, and PushGateway ([2cf507f](https://github.com/disafronov/etl-prometheus2clickhouse/commit/2cf507faf9dfdab81d20546bdd1b3a58ffca4697))
+
+### Bug Fixes
+
+* update logging level for job status checks in ETL job ([064b950](https://github.com/disafronov/etl-prometheus2clickhouse/commit/064b95009273a3fd21801f56ed0cb95be5067800))
+
 ## [1.0.0-rc.7](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0-rc.6...v1.0.0-rc.7) (2025-12-25)
 
 ### Features
