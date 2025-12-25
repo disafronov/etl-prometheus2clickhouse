@@ -21,6 +21,53 @@ services:
     networks:
       - etl_network
 
+  clickhouse_init:
+    image: curlimages/curl:latest
+    container_name: clickhouse_init
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - etl_network
+    configs:
+      - source: clickhouse_init_sql
+        target: /init.sql
+    command:
+      - sh
+      - -c
+      - |
+        echo "Waiting for ClickHouse to be ready..."
+        until curl -s http://clickhouse:8123/ping > /dev/null; do
+          sleep 1
+        done
+        echo "ClickHouse is ready. Creating table..."
+        curl -s http://clickhouse:8123/ --data-binary @/init.sql
+        echo "Table creation completed."
+
+  pushgateway_init:
+    image: curlimages/curl:latest
+    container_name: pushgateway_init
+    depends_on:
+      pushgateway:
+        condition: service_healthy
+    networks:
+      - etl_network
+    command:
+      - sh
+      - -c
+      - |
+        echo "Waiting for PushGateway to be ready..."
+        until curl -s http://pushgateway:9091/-/healthy > /dev/null; do
+          sleep 1
+        done
+        echo "PushGateway is ready. Initializing ETL progress..."
+        TIMESTAMP_PROGRESS=$(date +%s)
+        curl -s -X POST http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse \
+          -d "# TYPE etl_timestamp_progress gauge
+        etl_timestamp_progress $TIMESTAMP_PROGRESS
+        "
+        echo "ETL progress initialized with timestamp: $TIMESTAMP_PROGRESS"
+
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
@@ -151,6 +198,16 @@ configs:
             protocol: http
           secureJsonData: {}
           editable: false
+
+  clickhouse_init_sql:
+    content: |
+      CREATE TABLE IF NOT EXISTS default.prometheus_raw (
+          timestamp DateTime,
+          metric_name String,
+          labels String,
+          value Float64
+      ) ENGINE = ReplacingMergeTree()
+      ORDER BY (timestamp, metric_name, labels);
 
 volumes:
   clickhouse_data:
