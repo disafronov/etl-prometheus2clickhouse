@@ -1,6 +1,6 @@
 [project]
 name = "etl-prometheus2clickhouse"
-version = "1.0.0rc9"
+version = "1.0.0rc10"
 description = "ETL job for transferring metrics from Prometheus/Mimir to ClickHouse using PushGateway for state."
 readme = "README.md"
 requires-python = ">=3.10"
