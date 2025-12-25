@@ -119,9 +119,8 @@ class EtlJob:
                 # Always clean up temporary file, even if write fails
                 self._cleanup_temp_file(file_path)
         else:
-            # No data to insert, clean up empty file if it was created
-            if file_path:
-                self._cleanup_temp_file(file_path)
+            # No data to insert, clean up empty file
+            self._cleanup_temp_file(file_path)
             logger.info("No data to insert, skipping ClickHouse write")
 
         # Calculate new progress, but never exceed current time to avoid going
