@@ -683,7 +683,7 @@ def test_clickhouse_client_get_state_invalid_table_name(mock_get_client: Mock) -
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
-    cfg = _make_clickhouse_config(table_state="invalid-table-name!")
+    cfg = _make_clickhouse_config(table_etl="invalid-table-name!")
     client = ClickHouseClient(cfg)
 
     with pytest.raises(ValueError, match="Invalid table name format"):
@@ -801,7 +801,7 @@ def test_clickhouse_client_save_state_custom_table(mock_get_client: Mock) -> Non
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
-    cfg = _make_clickhouse_config(table_state="custom.state_table")
+    cfg = _make_clickhouse_config(table_etl="custom.state_table")
     client = ClickHouseClient(cfg)
 
     client.save_state(timestamp_progress=1700000000)
