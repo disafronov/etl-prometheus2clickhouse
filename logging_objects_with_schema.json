@@ -145,6 +145,38 @@
             "type": "str",
             "source": "etl_job.invalid_value_pair.error_type"
           }
+        },
+        "fetch_data_empty_result": {
+          "window_start": {
+            "type": "float",
+            "source": "etl_job.fetch_data_empty_result.window_start"
+          },
+          "window_end": {
+            "type": "float",
+            "source": "etl_job.fetch_data_empty_result.window_end"
+          },
+          "step": {
+            "type": "str",
+            "source": "etl_job.fetch_data_empty_result.step"
+          }
+        },
+        "fetch_data_success": {
+          "series_count": {
+            "type": "int",
+            "source": "etl_job.fetch_data_success.series_count"
+          },
+          "rows_count": {
+            "type": "int",
+            "source": "etl_job.fetch_data_success.rows_count"
+          },
+          "window_start": {
+            "type": "float",
+            "source": "etl_job.fetch_data_success.window_start"
+          },
+          "window_end": {
+            "type": "float",
+            "source": "etl_job.fetch_data_success.window_end"
+          }
         }
       }
     }

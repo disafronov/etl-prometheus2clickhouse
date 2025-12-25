@@ -325,6 +325,17 @@ class EtlJob:
         result = data.get("data", {}).get("result", [])
         rows: list[dict[str, Any]] = []
 
+        if not result:
+            logger.warning(
+                "No metrics found in Prometheus for the specified time window",
+                extra={
+                    "etl_job.fetch_data_empty_result.window_start": window_start,
+                    "etl_job.fetch_data_empty_result.window_end": window_end,
+                    "etl_job.fetch_data_empty_result.step": step,
+                },
+            )
+            return rows
+
         for series in result:
             metric = series.get("metric", {})
             metric_name = metric.get("__name__", "")
@@ -357,6 +368,16 @@ class EtlJob:
                     "value": value,
                 }
                 rows.append(row)
+
+        logger.info(
+            f"Parsed {len(rows)} data points from {len(result)} metric series",
+            extra={
+                "etl_job.fetch_data_success.series_count": len(result),
+                "etl_job.fetch_data_success.rows_count": len(rows),
+                "etl_job.fetch_data_success.window_start": window_start,
+                "etl_job.fetch_data_success.window_end": window_end,
+            },
+        )
 
         return rows
 
