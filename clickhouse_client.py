@@ -6,7 +6,6 @@ ClickHouse client wrapper for batch inserts.
 from __future__ import annotations
 
 import os
-from typing import Any
 from urllib.parse import urlparse
 
 import clickhouse_connect
@@ -88,61 +87,6 @@ class ClickHouseClient:
                 extra={
                     "clickhouse_client.connection_failed.error": str(exc),
                     "clickhouse_client.connection_failed.url": config.url,
-                },
-            )
-            raise
-
-    def insert_rows(self, rows: list[dict[str, Any]]) -> None:
-        """Insert rows into configured table in a single batch.
-
-        Performs atomic batch insert for efficiency. Empty list is handled
-        gracefully (no-op) to avoid unnecessary database calls. All rows
-        must have required keys: timestamp, metric_name, labels, value.
-
-        Args:
-            rows: List of row dictionaries to insert
-
-        Raises:
-            KeyError: If row is missing required keys
-            Exception: If ClickHouse insert operation fails
-        """
-        if not rows:
-            return
-
-        self._validate_table_name(self._table_metrics, "table_metrics")
-
-        try:
-            # Expect rows with keys: timestamp, metric_name, labels, value
-            columns = ("timestamp", "metric_name", "labels", "value")
-            data = [
-                (row["timestamp"], row["metric_name"], row["labels"], row["value"])
-                for row in rows
-            ]
-        except KeyError as exc:
-            error_msg = f"Invalid row format for ClickHouse insert: Missing key: {exc}"
-            logger.error(
-                error_msg,
-                extra={
-                    "clickhouse_client.insert_failed.error": f"Missing key: {exc}",
-                    "clickhouse_client.insert_failed.table": self._table_metrics,
-                    "clickhouse_client.insert_failed.rows_count": len(rows),
-                },
-            )
-            raise
-
-        try:
-            self._client.insert(
-                self._table_metrics,
-                data,
-                column_names=list(columns),
-            )
-        except Exception as exc:
-            logger.error(
-                f"Failed to insert rows into ClickHouse: {type(exc).__name__}: {exc}",
-                extra={
-                    "clickhouse_client.insert_failed.error": str(exc),
-                    "clickhouse_client.insert_failed.table": self._table_metrics,
-                    "clickhouse_client.insert_failed.rows_count": len(rows),
                 },
             )
             raise
