@@ -570,14 +570,14 @@ class EtlJob:
                 batch_rows=rows_count,
             )
             logger.info(
-                f"Metrics updated: progress={int(timestamp_progress)}, "
+                f"State saved: progress={int(timestamp_progress)}, "
                 f"rows={rows_count}, window={window_seconds}s"
             )
         except Exception as exc:
             logger.error(
-                "Failed to save metrics after successful batch",
+                "Failed to save state after successful batch",
                 extra={
-                    "etl_job.save_metrics_failed.message": str(exc),
+                    "etl_job.save_state_failed.message": str(exc),
                 },
             )
             raise
