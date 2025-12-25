@@ -288,6 +288,26 @@ class ClickHouseClient:
             )
             raise
 
+    @staticmethod
+    def _validate_int_value(value: int | None, field_name: str) -> None:
+        """Validate that value is int (not None) before SQL insertion.
+
+        This prevents SQL injection even if types change in future code.
+        All values inserted into SQL queries must be validated int to ensure
+        they cannot contain SQL injection payloads.
+
+        Args:
+            value: Value to validate (must be int, not None)
+            field_name: Name of field for error message
+
+        Raises:
+            TypeError: If value is not int (None is allowed but not used in SQL)
+        """
+        if value is not None and not isinstance(value, int):
+            raise TypeError(
+                f"{field_name} must be int, got {type(value).__name__}: {value}"
+            )
+
     def save_state(
         self,
         timestamp_progress: int | None = None,
@@ -329,6 +349,22 @@ class ClickHouseClient:
                 # Update existing record by timestamp_start
                 # has_other_fields guarantees at least one field is not None,
                 # so updates will never be empty
+                # Validate all values are int before SQL construction to prevent
+                # SQL injection. This is critical security measure even though
+                # types guarantee int
+                self._validate_int_value(timestamp_start, "timestamp_start")
+                if timestamp_progress is not None:
+                    self._validate_int_value(timestamp_progress, "timestamp_progress")
+                if timestamp_end is not None:
+                    self._validate_int_value(timestamp_end, "timestamp_end")
+                if batch_window_seconds is not None:
+                    self._validate_int_value(
+                        batch_window_seconds, "batch_window_seconds"
+                    )
+                if batch_rows is not None:
+                    self._validate_int_value(batch_rows, "batch_rows")
+
+                # Now safe to construct SQL - all values are validated int
                 updates = []
                 if timestamp_progress is not None:
                     updates.append(f"timestamp_progress = {timestamp_progress}")
