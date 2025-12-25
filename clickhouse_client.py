@@ -73,9 +73,8 @@ class ClickHouseClient:
                 verify=not config.insecure,
             )
         except Exception as exc:
-            error_details = f"{type(exc).__name__}: {exc}"
             logger.error(
-                f"Failed to create ClickHouse client: {error_details}",
+                f"Failed to create ClickHouse client: {type(exc).__name__}: {exc}",
                 extra={
                     "clickhouse_client.connection_failed.error": str(exc),
                     "clickhouse_client.connection_failed.url": config.url,
@@ -131,9 +130,8 @@ class ClickHouseClient:
                 column_names=list(columns),
             )
         except Exception as exc:
-            error_details = f"{type(exc).__name__}: {exc}"
             logger.error(
-                f"Failed to insert rows into ClickHouse: {error_details}",
+                f"Failed to insert rows into ClickHouse: {type(exc).__name__}: {exc}",
                 extra={
                     "clickhouse_client.insert_failed.error": str(exc),
                     "clickhouse_client.insert_failed.table": self._table_metrics,
@@ -242,9 +240,12 @@ class ClickHouseClient:
             if rows:
                 self.insert_rows(rows)
         except Exception as exc:
-            error_details = f"{type(exc).__name__}: {exc}"
+            error_msg = (
+                f"Failed to insert from file into ClickHouse: "
+                f"{type(exc).__name__}: {exc}"
+            )
             logger.error(
-                f"Failed to insert from file into ClickHouse: {error_details}",
+                error_msg,
                 extra={
                     "clickhouse_client.insert_from_file_failed.error": str(exc),
                     "clickhouse_client.insert_from_file_failed.file_path": file_path,

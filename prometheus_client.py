@@ -45,6 +45,85 @@ class PrometheusClient:
 
         self._verify = not config.insecure
 
+    def _execute_request(
+        self,
+        url: str,
+        params: dict[str, str | int],
+        expr: str,
+        query_type: str,
+        extra_log_fields: dict[str, Any] | None = None,
+    ) -> requests.Response:
+        """Execute HTTP GET request to Prometheus API with error handling.
+
+        Handles common exceptions (Timeout, ConnectionError, RequestException)
+        with structured logging. Used by both query() and query_range() methods.
+
+        Args:
+            url: Full URL to Prometheus API endpoint
+            params: Query parameters for the request
+            expr: PromQL expression (for error context)
+            query_type: Type of query ("query" or "query_range") for log prefixes
+            extra_log_fields: Optional additional fields for logging
+                (e.g., step, window_seconds)
+
+        Returns:
+            HTTP response object
+
+        Raises:
+            requests.Timeout: If request times out
+            requests.ConnectionError: If connection fails
+            requests.RequestException: If request fails for other reasons
+        """
+        if extra_log_fields is None:
+            extra_log_fields = {}
+
+        try:
+            response = requests.get(
+                url,
+                params=params,
+                timeout=self._timeout,
+                auth=self._auth,
+                verify=self._verify,
+            )
+        except requests.Timeout as exc:
+            log_extra = {
+                f"prometheus_client.{query_type}_timeout.error": str(exc),
+                f"prometheus_client.{query_type}_timeout.expression": expr,
+                f"prometheus_client.{query_type}_timeout.url": url,
+                f"prometheus_client.{query_type}_timeout.timeout": self._timeout,
+            }
+            log_extra.update(extra_log_fields)
+            logger.error(
+                f"Prometheus {query_type} timeout",
+                extra=log_extra,
+            )
+            raise
+        except requests.ConnectionError as exc:
+            logger.error(
+                f"Prometheus {query_type} connection error",
+                extra={
+                    f"prometheus_client.{query_type}_connection_error.error": str(exc),
+                    f"prometheus_client.{query_type}_connection_error.expression": expr,
+                    f"prometheus_client.{query_type}_connection_error.url": url,
+                },
+            )
+            raise
+        except requests.RequestException as exc:
+            logger.error(
+                f"Prometheus {query_type} request failed",
+                extra={
+                    f"prometheus_client.{query_type}_request_failed.error": str(exc),
+                    f"prometheus_client.{query_type}_request_failed.error_type": type(
+                        exc
+                    ).__name__,
+                    f"prometheus_client.{query_type}_request_failed.expression": expr,
+                    f"prometheus_client.{query_type}_request_failed.url": url,
+                },
+            )
+            raise
+
+        return response
+
     def _handle_response(
         self, response: requests.Response, expression: str
     ) -> dict[str, Any]:
@@ -134,49 +213,12 @@ class PrometheusClient:
             ValueError: If response is invalid
         """
         url = f"{self._base_url}/api/v1/query"
-        try:
-            response = requests.get(
-                url,
-                params={"query": expr},
-                timeout=self._timeout,
-                auth=self._auth,
-                verify=self._verify,
-            )
-        except requests.Timeout as exc:
-            logger.error(
-                "Prometheus query timeout",
-                extra={
-                    "prometheus_client.query_timeout.error": str(exc),
-                    "prometheus_client.query_timeout.expression": expr,
-                    "prometheus_client.query_timeout.url": url,
-                    "prometheus_client.query_timeout.timeout": self._timeout,
-                },
-            )
-            raise
-        except requests.ConnectionError as exc:
-            logger.error(
-                "Prometheus query connection error",
-                extra={
-                    "prometheus_client.query_connection_error.error": str(exc),
-                    "prometheus_client.query_connection_error.expression": expr,
-                    "prometheus_client.query_connection_error.url": url,
-                },
-            )
-            raise
-        except requests.RequestException as exc:
-            logger.error(
-                "Prometheus query request failed",
-                extra={
-                    "prometheus_client.query_request_failed.error": str(exc),
-                    "prometheus_client.query_request_failed.error_type": type(
-                        exc
-                    ).__name__,
-                    "prometheus_client.query_request_failed.expression": expr,
-                    "prometheus_client.query_request_failed.url": url,
-                },
-            )
-            raise
-
+        response = self._execute_request(
+            url=url,
+            params={"query": expr},
+            expr=expr,
+            query_type="query",
+        )
         return self._handle_response(response, expr)
 
     def query_range(self, expr: str, start: int, end: int, step: str) -> dict[str, Any]:
@@ -207,51 +249,16 @@ class PrometheusClient:
             "end": end,
             "step": step,
         }
-        try:
-            response = requests.get(
-                url,
-                params=params,
-                timeout=self._timeout,
-                auth=self._auth,
-                verify=self._verify,
-            )
-        except requests.Timeout as exc:
-            logger.error(
-                "Prometheus query_range timeout",
-                extra={
-                    "prometheus_client.query_range_timeout.error": str(exc),
-                    "prometheus_client.query_range_timeout.expression": expr,
-                    "prometheus_client.query_range_timeout.url": url,
-                    "prometheus_client.query_range_timeout.timeout": self._timeout,
-                    "prometheus_client.query_range_timeout.window_seconds": int(
-                        end - start
-                    ),
-                    "prometheus_client.query_range_timeout.step": step,
-                },
-            )
-            raise
-        except requests.ConnectionError as exc:
-            logger.error(
-                "Prometheus query_range connection error",
-                extra={
-                    "prometheus_client.query_range_connection_error.error": str(exc),
-                    "prometheus_client.query_range_connection_error.expression": expr,
-                    "prometheus_client.query_range_connection_error.url": url,
-                },
-            )
-            raise
-        except requests.RequestException as exc:
-            logger.error(
-                "Prometheus query_range request failed",
-                extra={
-                    "prometheus_client.query_range_request_failed.error": str(exc),
-                    "prometheus_client.query_range_request_failed.error_type": type(
-                        exc
-                    ).__name__,
-                    "prometheus_client.query_range_request_failed.expression": expr,
-                    "prometheus_client.query_range_request_failed.url": url,
-                },
-            )
-            raise
-
+        response = self._execute_request(
+            url=url,
+            params=params,
+            expr=expr,
+            query_type="query_range",
+            extra_log_fields={
+                "prometheus_client.query_range_timeout.window_seconds": int(
+                    end - start
+                ),
+                "prometheus_client.query_range_timeout.step": step,
+            },
+        )
         return self._handle_response(response, expr)
