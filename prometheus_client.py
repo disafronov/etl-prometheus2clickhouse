@@ -36,8 +36,10 @@ class PrometheusClient:
         self._timeout = config.timeout
 
         self._auth = None
-        # Use is not None to allow empty string passwords
-        # Empty string "" is different from None for HTTP Basic Auth
+        # Password is normalized by PrometheusConfig validator: if user is
+        # specified but password is None, it's converted to empty string "".
+        # Empty string "" is different from None for HTTP Basic Auth.
+        # After normalization, password will be either explicitly set or "" (not None).
         if config.user is not None and config.password is not None:
             self._auth = (config.user, config.password)
 

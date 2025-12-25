@@ -55,6 +55,26 @@ class PrometheusConfig(BaseSettings):
         ),
     )
 
+    @model_validator(mode="after")
+    def normalize_password(self) -> PrometheusConfig:
+        """Normalize password: if user is specified but password is None,
+        convert password to empty string.
+
+        This handles the case when PROMETHEUS_PASSWORD is set to empty string
+        in environment variables. With env_ignore_empty=True, empty strings
+        are converted to None, but HTTP Basic Auth requires explicit
+        authentication even with empty password when user is specified.
+
+        Returns:
+            Self with normalized password field
+        """
+        if self.user is not None and self.password is None:
+            # This is not a hardcoded password, but normalization of empty
+            # password value. Empty string is required for HTTP Basic Auth
+            # when password is empty but user is specified.
+            self.password = ""  # nosec B105
+        return self
+
 
 class ClickHouseConfig(BaseSettings):
     """ClickHouse connection configuration.

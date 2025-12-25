@@ -53,6 +53,20 @@ def test_prometheus_client_init_with_empty_password() -> None:
     assert client._auth == ("testuser", "")
 
 
+def test_prometheus_client_init_with_user_but_no_password() -> None:
+    """Client should normalize None password to empty string when user is specified.
+
+    This handles the case when PROMETHEUS_PASSWORD is set to empty string
+    in environment variables and env_ignore_empty=True converts it to None.
+    HTTP Basic Auth requires explicit authentication even with empty password.
+    """
+    config = _make_prometheus_config(user="testuser", password=None)
+    # Password should be normalized to empty string by validator
+    assert config.password == ""
+    client = PrometheusClient(config)
+    assert client._auth == ("testuser", "")
+
+
 def test_prometheus_client_init_with_insecure() -> None:
     """Client should disable TLS verification when insecure=True."""
     config = _make_prometheus_config(insecure=True)
