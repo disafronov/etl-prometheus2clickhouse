@@ -109,9 +109,6 @@ class ClickHouseClient:
         if not rows:
             return
 
-        # Table name comes from configuration, not user input.
-        # ClickHouse doesn't support parameterized table names in queries,
-        # so we validate the table name format before using it.
         self._validate_table_name(self._table_metrics, "table_metrics")
 
         try:
@@ -180,15 +177,11 @@ class ClickHouseClient:
             )
             raise FileNotFoundError(error_msg)
 
-        # Table name comes from configuration, not user input.
-        # ClickHouse doesn't support parameterized table names in queries,
-        # so we validate the table name format before using it.
         self._validate_table_name(self._table_metrics, "table_metrics")
 
         # Use HTTP POST with streaming file upload
         # This is memory-efficient as it streams file directly to ClickHouse
         # without loading entire file into memory
-        # Table name comes from configuration, validated earlier
         try:
             # Construct query parameter for INSERT statement
             query = f"INSERT INTO {self._table_metrics} FORMAT JSONEachRow"
@@ -367,9 +360,6 @@ class ClickHouseClient:
             if not columns:
                 return  # Nothing to insert
 
-            # Table name comes from configuration, not user input.
-            # ClickHouse doesn't support parameterized table names in queries,
-            # so we validate the table name format before using it.
             self._validate_table_name(self._table_etl, "table_etl")
 
             self._client.insert(
