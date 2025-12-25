@@ -100,6 +100,14 @@ class ClickHouseClient:
         if not rows:
             return
 
+        # Table name comes from configuration, not user input.
+        # ClickHouse doesn't support parameterized table names in queries,
+        # so we validate the table name format before using it.
+        # Format: database.table or just table
+        # (allowed characters: alphanumeric, underscore, dot)
+        if not all(c.isalnum() or c in ("_", ".") for c in self._table_metrics):
+            raise ValueError(f"Invalid table name format: {self._table_metrics}")
+
         try:
             # Expect rows with keys: timestamp, metric_name, labels, value
             columns = ("timestamp", "metric_name", "labels", "value")
@@ -166,6 +174,14 @@ class ClickHouseClient:
                 },
             )
             raise FileNotFoundError(error_msg)
+
+        # Table name comes from configuration, not user input.
+        # ClickHouse doesn't support parameterized table names in queries,
+        # so we validate the table name format before using it.
+        # Format: database.table or just table
+        # (allowed characters: alphanumeric, underscore, dot)
+        if not all(c.isalnum() or c in ("_", ".") for c in self._table_metrics):
+            raise ValueError(f"Invalid table name format: {self._table_metrics}")
 
         try:
             # Use insert_file method if available, otherwise fall back to raw_query
