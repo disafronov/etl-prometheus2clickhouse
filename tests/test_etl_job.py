@@ -842,3 +842,94 @@ def test_etl_job_fetch_data_handles_invalid_value_pairs() -> None:
     # Should only process valid value pairs (2 out of 4)
     assert len(ch.inserts) == 1
     assert len(ch.inserts[0]) == 2
+
+
+def test_etl_job_run_once_handles_empty_result_from_prometheus() -> None:
+    """EtlJob should handle empty result from Prometheus gracefully."""
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+    pg = DummyPushGatewayClient()
+
+    prom.set_query_response(
+        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
+    )
+    prom.set_query_response(
+        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
+    )
+    prom.set_query_response(
+        "etl_timestamp_progress",
+        {
+            "status": "success",
+            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
+        },
+    )
+
+    # Empty result from Prometheus
+    prom.set_query_range_response({"status": "success", "data": {"result": []}})
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+        pushgateway_client=pg,
+    )
+
+    job.run_once()
+
+    # Should complete successfully even with empty result
+    assert len(pg.starts) == 1
+    assert len(ch.inserts) == 0  # No rows to write
+    assert len(pg.success_calls) == 1
+    # Progress should still advance
+    assert pg.success_calls[0]["timestamp_progress"] == 1700000300.0
+    assert pg.success_calls[0]["rows_count"] == 0
+
+
+def test_etl_job_run_once_prevents_progress_from_going_into_future() -> None:
+    """EtlJob should not allow progress to exceed current time."""
+    import time
+
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+    pg = DummyPushGatewayClient()
+
+    # Set progress to a time very close to current time
+    current_time = time.time()
+    progress_in_future = current_time + 1000  # 1000 seconds in future
+
+    prom.set_query_response(
+        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
+    )
+    prom.set_query_response(
+        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
+    )
+    prom.set_query_response(
+        "etl_timestamp_progress",
+        {
+            "status": "success",
+            "data": {"result": [{"value": [1234567890, str(progress_in_future)]}]},
+        },
+    )
+
+    # Empty result - no data in Prometheus for future window
+    prom.set_query_range_response({"status": "success", "data": {"result": []}})
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+        pushgateway_client=pg,
+    )
+
+    job.run_once()
+
+    # Progress should be capped at current time, not go further into future
+    assert len(pg.success_calls) == 1
+    new_progress = pg.success_calls[0]["timestamp_progress"]
+    # Should not exceed current time (allow small margin for execution time)
+    assert new_progress <= time.time() + 1
+    # Should not be progress_in_future + batch_window_seconds
+    expected_future_progress = progress_in_future + config.etl.batch_window_seconds
+    assert new_progress < expected_future_progress
