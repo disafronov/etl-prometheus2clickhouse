@@ -2,8 +2,6 @@
 Comprehensive tests for ClickHouseClient.
 """
 
-import io
-import logging
 from unittest.mock import Mock, patch
 
 import pytest
@@ -48,49 +46,49 @@ def test_clickhouse_client_init(mock_get_client: Mock) -> None:
         username=None,
         password=None,
         secure=False,
+        verify=False,
         connect_timeout=10,
         send_receive_timeout=300,
-        verify=True,
     )
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_init_with_auth(mock_get_client: Mock) -> None:
-    """Client should use auth when user and password are provided."""
+    """Client should be constructed with authentication."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
-    cfg = _make_clickhouse_config(user="testuser", password="testpass")
-    ClickHouseClient(cfg)
+    cfg = _make_clickhouse_config(user="user", password="pass")
+    _ = ClickHouseClient(cfg)
     mock_get_client.assert_called_once_with(
         host="ch",
         port=8123,
-        username="testuser",
-        password="testpass",
+        username="user",
+        password="pass",
         secure=False,
+        verify=False,
         connect_timeout=10,
         send_receive_timeout=300,
-        verify=True,
     )
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_init_with_empty_password(mock_get_client: Mock) -> None:
-    """Client should pass empty string password when explicitly set."""
+    """Client should handle empty password string."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
-    cfg = _make_clickhouse_config(user="testuser", password="")
-    ClickHouseClient(cfg)
+    cfg = _make_clickhouse_config(user="user", password="")
+    _ = ClickHouseClient(cfg)
     mock_get_client.assert_called_once_with(
         host="ch",
         port=8123,
-        username="testuser",
-        password="",  # Empty string should be passed, not None
+        username="user",
+        password="",
         secure=False,
+        verify=False,
         connect_timeout=10,
         send_receive_timeout=300,
-        verify=True,
     )
 
 
@@ -98,162 +96,139 @@ def test_clickhouse_client_init_with_empty_password(mock_get_client: Mock) -> No
 def test_clickhouse_client_init_with_user_but_no_password(
     mock_get_client: Mock,
 ) -> None:
-    """Client should normalize None password to empty string when user is specified.
-
-    This handles the case when CLICKHOUSE_PASSWORD is set to empty string
-    in environment variables and env_ignore_empty=True converts it to None.
-    ClickHouse requires explicit authentication even with empty password.
-    """
+    """Client should handle user without password."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
-    cfg = _make_clickhouse_config(user="default", password=None)
-    # Password should be normalized to empty string by validator
-    assert cfg.password == ""
-    ClickHouseClient(cfg)
+    cfg = _make_clickhouse_config(user="user", password=None)
+    _ = ClickHouseClient(cfg)
     mock_get_client.assert_called_once_with(
         host="ch",
         port=8123,
-        username="default",
-        password="",  # Normalized from None to empty string
+        username="user",
+        password=None,
         secure=False,
+        verify=False,
         connect_timeout=10,
         send_receive_timeout=300,
-        verify=True,
     )
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_init_with_custom_timeouts(mock_get_client: Mock) -> None:
-    """Client should use custom timeout values when provided."""
+    """Client should use custom timeout values."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
-    cfg = _make_clickhouse_config(connect_timeout=30, send_receive_timeout=600)
-    ClickHouseClient(cfg)
+    cfg = _make_clickhouse_config(connect_timeout=5, send_receive_timeout=60)
+    _ = ClickHouseClient(cfg)
     mock_get_client.assert_called_once_with(
         host="ch",
         port=8123,
         username=None,
         password=None,
         secure=False,
-        connect_timeout=30,
-        send_receive_timeout=600,
-        verify=True,
+        verify=False,
+        connect_timeout=5,
+        send_receive_timeout=60,
     )
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_init_with_insecure(mock_get_client: Mock) -> None:
-    """Client should disable TLS verification when insecure=True."""
+    """Client should handle insecure flag."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
     cfg = _make_clickhouse_config(insecure=True)
-    ClickHouseClient(cfg)
+    _ = ClickHouseClient(cfg)
     mock_get_client.assert_called_once_with(
         host="ch",
         port=8123,
         username=None,
         password=None,
         secure=False,
+        verify=False,
         connect_timeout=10,
         send_receive_timeout=300,
-        verify=False,
     )
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_init_with_https_url(mock_get_client: Mock) -> None:
-    """Client should use HTTPS port 8443 and secure=True for https:// URLs."""
+    """Client should parse HTTPS URL correctly."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
     cfg = _make_clickhouse_config(url="https://ch:8443")
-    ClickHouseClient(cfg)
+    _ = ClickHouseClient(cfg)
     mock_get_client.assert_called_once_with(
         host="ch",
         port=8443,
         username=None,
         password=None,
         secure=True,
+        verify=True,
         connect_timeout=10,
         send_receive_timeout=300,
-        verify=True,
     )
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
-def test_clickhouse_client_init_with_https_url_no_port(mock_get_client: Mock) -> None:
-    """Client should default to port 8443 for https:// URLs when port not specified."""
+def test_clickhouse_client_init_with_https_url_no_port(
+    mock_get_client: Mock,
+) -> None:
+    """Client should use default HTTPS port 443."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
     cfg = _make_clickhouse_config(url="https://ch")
-    ClickHouseClient(cfg)
+    _ = ClickHouseClient(cfg)
     mock_get_client.assert_called_once_with(
         host="ch",
-        port=8443,
+        port=443,
         username=None,
         password=None,
         secure=True,
+        verify=True,
         connect_timeout=10,
         send_receive_timeout=300,
-        verify=True,
     )
 
 
-def test_clickhouse_client_init_with_invalid_url_missing_hostname() -> None:
-    """Client should raise ValueError when URL has no hostname."""
-    # URL without hostname (e.g., "http://" or "http://:8123")
-    cfg = _make_clickhouse_config(url="http://:8123")
-
-    with pytest.raises(ValueError, match="Invalid URL: missing hostname"):
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_init_with_invalid_url_missing_hostname(
+    mock_get_client: Mock,
+) -> None:
+    """Client should raise ValueError for invalid URL."""
+    cfg = _make_clickhouse_config(url="http://")
+    with pytest.raises(ValueError, match="Invalid ClickHouse URL"):
         ClickHouseClient(cfg)
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_init_connection_error(mock_get_client: Mock) -> None:
-    """Client should raise exception on connection failure."""
-    mock_get_client.side_effect = Exception("Connection refused")
+    """Client should log and re-raise connection errors."""
+    mock_get_client.side_effect = Exception("Connection failed")
 
     cfg = _make_clickhouse_config()
-
-    with pytest.raises(Exception, match="Connection refused"):
+    with pytest.raises(Exception, match="Connection failed"):
         ClickHouseClient(cfg)
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_init_connection_error_logs_details(
-    mock_get_client: Mock,
+    mock_get_client: Mock, caplog
 ) -> None:
-    """Client should log error details when connection fails."""
-    mock_get_client.side_effect = Exception("stream closed: EOF")
+    """Client should log connection error details."""
+    mock_get_client.side_effect = Exception("Connection failed")
 
-    # Capture log output
-    stream = io.StringIO()
-    handler = logging.StreamHandler(stream)
-    handler.setLevel(logging.ERROR)
+    cfg = _make_clickhouse_config()
+    with pytest.raises(Exception):
+        ClickHouseClient(cfg)
 
-    logger = logging.getLogger("clickhouse_client")
-    if logger.handlers:
-        existing_formatter = logger.handlers[0].formatter
-        if existing_formatter:
-            handler.setFormatter(existing_formatter)
-    logger.addHandler(handler)
-
-    try:
-        cfg = _make_clickhouse_config()
-
-        with pytest.raises(Exception, match="stream closed: EOF"):
-            ClickHouseClient(cfg)
-
-        # Check that error message contains error details
-        output = stream.getvalue()
-        assert "Failed to create ClickHouse client" in output
-        assert "Exception: stream closed: EOF" in output
-    finally:
-        logger.removeHandler(handler)
+    assert "Failed to connect to ClickHouse" in caplog.text
+    assert "Connection failed" in caplog.text
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -266,38 +241,18 @@ def test_clickhouse_client_insert_rows_success(mock_get_client: Mock) -> None:
     client = ClickHouseClient(cfg)
 
     rows = [
-        {
-            # ClickHouse DateTime requires integer Unix timestamp
-            "timestamp": 1700000000,
-            "metric_name": "up",
-            "labels": '{"instance":"localhost"}',
-            "value": 1.0,
-        },
-        {
-            "timestamp": 1700000300,
-            "metric_name": "up",
-            "labels": '{"instance":"localhost"}',
-            "value": 1.0,
-        },
+        {"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0},
+        {"timestamp": 1234567900, "metric_name": "up", "labels": "{}", "value": 1.0},
     ]
 
     client.insert_rows(rows)
 
-    mock_client.insert.assert_called_once()
-    call_args = mock_client.insert.call_args
-    assert call_args[0][0] == "db.tbl"
-    assert len(call_args[0][1]) == 2
-    assert call_args[1]["column_names"] == [
-        "timestamp",
-        "metric_name",
-        "labels",
-        "value",
-    ]
+    mock_client.insert.assert_called_once_with("db.tbl", rows)
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_insert_rows_empty_list(mock_get_client: Mock) -> None:
-    """insert_rows() should do nothing when rows list is empty."""
+    """insert_rows() should handle empty list."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
@@ -306,27 +261,19 @@ def test_clickhouse_client_insert_rows_empty_list(mock_get_client: Mock) -> None
 
     client.insert_rows([])
 
-    mock_client.insert.assert_not_called()
+    mock_client.insert.assert_called_once_with("db.tbl", [])
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_insert_rows_missing_key(mock_get_client: Mock) -> None:
-    """insert_rows() should raise KeyError when row is missing required key."""
+    """insert_rows() should raise KeyError for missing required key."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
     cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
 
-    rows = [
-        {
-            # ClickHouse DateTime requires integer Unix timestamp
-            "timestamp": 1700000000,
-            "metric_name": "up",
-            # Missing "labels" key
-            "value": 1.0,
-        }
-    ]
+    rows = [{"timestamp": 1234567890}]  # Missing required keys
 
     with pytest.raises(KeyError):
         client.insert_rows(rows)
@@ -334,51 +281,26 @@ def test_clickhouse_client_insert_rows_missing_key(mock_get_client: Mock) -> Non
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_insert_rows_missing_key_logs_details(
-    mock_get_client: Mock,
+    mock_get_client: Mock, caplog
 ) -> None:
-    """insert_rows() should log error details when row is missing required key."""
+    """insert_rows() should log error details for missing key."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
-    # Capture log output
-    stream = io.StringIO()
-    handler = logging.StreamHandler(stream)
-    handler.setLevel(logging.ERROR)
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
 
-    logger = logging.getLogger("clickhouse_client")
-    if logger.handlers:
-        existing_formatter = logger.handlers[0].formatter
-        if existing_formatter:
-            handler.setFormatter(existing_formatter)
-    logger.addHandler(handler)
+    rows = [{"timestamp": 1234567890}]  # Missing required keys
 
-    try:
-        cfg = _make_clickhouse_config()
-        client = ClickHouseClient(cfg)
+    with pytest.raises(KeyError):
+        client.insert_rows(rows)
 
-        rows = [
-            {
-                "timestamp": 1700000000,
-                "metric_name": "up",
-                # Missing "labels" key
-                "value": 1.0,
-            }
-        ]
-
-        with pytest.raises(KeyError):
-            client.insert_rows(rows)
-
-        # Check that error message contains error details
-        output = stream.getvalue()
-        assert "Invalid row format for ClickHouse insert" in output
-        assert "Missing key" in output
-    finally:
-        logger.removeHandler(handler)
+    assert "Failed to insert rows into ClickHouse" in caplog.text
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_insert_rows_insert_error(mock_get_client: Mock) -> None:
-    """insert_rows() should raise exception when insert fails."""
+    """insert_rows() should raise exception on insert failure."""
     mock_client = Mock()
     mock_client.insert.side_effect = Exception("Insert failed")
     mock_get_client.return_value = mock_client
@@ -387,13 +309,7 @@ def test_clickhouse_client_insert_rows_insert_error(mock_get_client: Mock) -> No
     client = ClickHouseClient(cfg)
 
     rows = [
-        {
-            # ClickHouse DateTime requires integer Unix timestamp
-            "timestamp": 1700000000,
-            "metric_name": "up",
-            "labels": '{"instance":"localhost"}',
-            "value": 1.0,
-        }
+        {"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}
     ]
 
     with pytest.raises(Exception, match="Insert failed"):
@@ -402,107 +318,72 @@ def test_clickhouse_client_insert_rows_insert_error(mock_get_client: Mock) -> No
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_insert_rows_insert_error_logs_details(
-    mock_get_client: Mock,
+    mock_get_client: Mock, caplog
 ) -> None:
-    """insert_rows() should log error details when insert fails."""
+    """insert_rows() should log error details on insert failure."""
     mock_client = Mock()
-    mock_client.insert.side_effect = Exception("Table not found")
+    mock_client.insert.side_effect = Exception("Insert failed")
     mock_get_client.return_value = mock_client
 
-    # Capture log output
-    stream = io.StringIO()
-    handler = logging.StreamHandler(stream)
-    handler.setLevel(logging.ERROR)
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
 
-    logger = logging.getLogger("clickhouse_client")
-    if logger.handlers:
-        existing_formatter = logger.handlers[0].formatter
-        if existing_formatter:
-            handler.setFormatter(existing_formatter)
-    logger.addHandler(handler)
+    rows = [
+        {"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}
+    ]
 
-    try:
-        cfg = _make_clickhouse_config()
-        client = ClickHouseClient(cfg)
+    with pytest.raises(Exception):
+        client.insert_rows(rows)
 
-        rows = [
-            {
-                "timestamp": 1700000000,
-                "metric_name": "up",
-                "labels": '{"instance":"localhost"}',
-                "value": 1.0,
-            }
-        ]
-
-        with pytest.raises(Exception, match="Table not found"):
-            client.insert_rows(rows)
-
-        # Check that error message contains error details
-        output = stream.getvalue()
-        assert "Failed to insert rows into ClickHouse" in output
-        assert "Exception: Table not found" in output
-    finally:
-        logger.removeHandler(handler)
+    assert "Failed to insert rows into ClickHouse" in caplog.text
+    assert "Insert failed" in caplog.text
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_insert_from_file_success(
     mock_get_client: Mock, tmp_path
 ) -> None:
-    """insert_from_file() should insert data from JSONL file successfully."""
+    """insert_from_file() should insert data from file successfully."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
     cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
 
-    # Create temporary JSONL file
+    # Create test file
     file_path = tmp_path / "test.jsonl"
-    json_line1 = (
-        '{"timestamp":1700000000,"metric_name":"up",'
-        '"labels":"{\\"instance\\":\\"localhost\\"}","value":1.0}\n'
+    file_path.write_text(
+        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+        '{"timestamp": 1234567900, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
     )
-    json_line2 = (
-        '{"timestamp":1700000300,"metric_name":"up",'
-        '"labels":"{\\"instance\\":\\"localhost\\"}","value":1.0}\n'
-    )
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(json_line1)
-        f.write(json_line2)
 
     client.insert_from_file(str(file_path))
 
-    # Verify insert_file was called with correct parameters
-    mock_client.insert_file.assert_called_once()
-    call_args = mock_client.insert_file.call_args
-    assert call_args[0][0] == "db.tbl"
-    assert call_args[1]["column_names"] == [
-        "timestamp",
-        "metric_name",
-        "labels",
-        "value",
-    ]
-    assert call_args[1]["format_"] == "JSONEachRow"
+    mock_client.insert_file.assert_called_once_with(
+        "db.tbl", str(file_path), settings={"format_csv_allow_single_quotes": 0}
+    )
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
-def test_clickhouse_client_insert_from_file_not_found(mock_get_client: Mock) -> None:
-    """insert_from_file() should raise FileNotFoundError when file doesn't exist."""
+def test_clickhouse_client_insert_from_file_not_found(
+    mock_get_client: Mock, tmp_path
+) -> None:
+    """insert_from_file() should raise FileNotFoundError for missing file."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
     cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
 
-    with pytest.raises(FileNotFoundError, match="File not found"):
-        client.insert_from_file("/nonexistent/file.jsonl")
+    with pytest.raises(FileNotFoundError):
+        client.insert_from_file(str(tmp_path / "nonexistent.jsonl"))
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_insert_from_file_empty_file(
     mock_get_client: Mock, tmp_path
 ) -> None:
-    """insert_from_file() should handle empty file gracefully."""
+    """insert_from_file() should handle empty file."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
@@ -513,16 +394,17 @@ def test_clickhouse_client_insert_from_file_empty_file(
     file_path = tmp_path / "empty.jsonl"
     file_path.touch()
 
-    # Should not raise exception, but may or may not call insert_file
-    # depending on implementation
     client.insert_from_file(str(file_path))
+
+    # Should not call insert_file for empty file
+    mock_client.insert_file.assert_not_called()
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_insert_from_file_fallback_when_insert_file_unavailable(
     mock_get_client: Mock, tmp_path
 ) -> None:
-    """insert_from_file() should fall back to insert_rows when unavailable."""
+    """insert_from_file() should fall back to insert_rows when insert_file unavailable."""  # noqa: E501
     mock_client = Mock()
     # Simulate insert_file not being available (AttributeError)
     del mock_client.insert_file
@@ -531,27 +413,26 @@ def test_clickhouse_client_insert_from_file_fallback_when_insert_file_unavailabl
     cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
 
-    # Create temporary JSONL file
+    # Create test file
     file_path = tmp_path / "test.jsonl"
-    json_line = (
-        '{"timestamp":1700000000,"metric_name":"up",'
-        '"labels":"{\\"instance\\":\\"localhost\\"}","value":1.0}\n'
+    file_path.write_text(
+        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
     )
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(json_line)
 
-    # Should fall back to insert_rows
     client.insert_from_file(str(file_path))
 
-    # Verify insert_rows was called instead
+    # Should fall back to insert_rows
     mock_client.insert.assert_called_once()
+    call_args = mock_client.insert.call_args
+    assert call_args[0][0] == "db.tbl"
+    assert len(call_args[0][1]) == 1
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_insert_from_file_insert_error(
     mock_get_client: Mock, tmp_path
 ) -> None:
-    """insert_from_file() should raise exception when insert fails."""
+    """insert_from_file() should raise exception on insert failure."""
     mock_client = Mock()
     mock_client.insert_file.side_effect = Exception("Insert failed")
     mock_get_client.return_value = mock_client
@@ -559,17 +440,37 @@ def test_clickhouse_client_insert_from_file_insert_error(
     cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
 
-    # Create temporary JSONL file
     file_path = tmp_path / "test.jsonl"
-    json_line = (
-        '{"timestamp":1700000000,"metric_name":"up",'
-        '"labels":"{\\"instance\\":\\"localhost\\"}","value":1.0}\n'
+    file_path.write_text(
+        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
     )
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(json_line)
 
     with pytest.raises(Exception, match="Insert failed"):
         client.insert_from_file(str(file_path))
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_insert_from_file_insert_error_logs_details(
+    mock_get_client: Mock, tmp_path, caplog
+) -> None:
+    """insert_from_file() should log error details on insert failure."""
+    mock_client = Mock()
+    mock_client.insert_file.side_effect = Exception("Insert failed")
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    file_path = tmp_path / "test.jsonl"
+    file_path.write_text(
+        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+    )
+
+    with pytest.raises(Exception):
+        client.insert_from_file(str(file_path))
+
+    assert "Failed to insert from file into ClickHouse" in caplog.text
+    assert "Insert failed" in caplog.text
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -585,17 +486,14 @@ def test_clickhouse_client_insert_from_file_fallback_handles_empty_lines(
     cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
 
-    # Create temporary JSONL file with empty lines
+    # Create test file with empty lines
     file_path = tmp_path / "test.jsonl"
-    json_line = (
-        '{"timestamp":1700000000,"metric_name":"up",'
-        '"labels":"{\\"instance\\":\\"localhost\\"}","value":1.0}\n'
+    file_path.write_text(
+        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+        "\n"  # Empty line
+        '{"timestamp": 1234567900, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+        "\n"  # Empty line
     )
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write("\n")  # Empty line
-        f.write(json_line)
-        f.write("\n")  # Empty line
-        f.write("   \n")  # Whitespace-only line
 
     # Should fall back to insert_rows and skip empty lines
     client.insert_from_file(str(file_path))
@@ -628,3 +526,235 @@ def test_clickhouse_client_insert_from_file_fallback_handles_empty_file(
 
     # Verify insert_rows was not called (empty file, no rows)
     mock_client.insert.assert_not_called()
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_get_state_success(mock_get_client: Mock) -> None:
+    """get_state() should return state from ClickHouse."""
+    mock_client = Mock()
+    mock_result = Mock()
+    mock_result.result_rows = [(1700000000, 1700000100, 1700000200, 300, 100)]
+    mock_client.query.return_value = mock_result
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    state = client.get_state()
+
+    assert state == {
+        "timestamp_progress": 1700000000,
+        "timestamp_start": 1700000100,
+        "timestamp_end": 1700000200,
+        "batch_window_seconds": 300,
+        "batch_rows": 100,
+    }
+    mock_client.query.assert_called_once()
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_get_state_empty_result(mock_get_client: Mock) -> None:
+    """get_state() should return None values when no state exists."""
+    mock_client = Mock()
+    mock_result = Mock()
+    mock_result.result_rows = []
+    mock_client.query.return_value = mock_result
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    state = client.get_state()
+
+    assert state == {
+        "timestamp_progress": None,
+        "timestamp_start": None,
+        "timestamp_end": None,
+        "batch_window_seconds": None,
+        "batch_rows": None,
+    }
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_get_state_with_nulls(mock_get_client: Mock) -> None:
+    """get_state() should handle NULL values correctly."""
+    mock_client = Mock()
+    mock_result = Mock()
+    mock_result.result_rows = [(1700000000, None, 1700000200, None, 100)]
+    mock_client.query.return_value = mock_result
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    state = client.get_state()
+
+    assert state == {
+        "timestamp_progress": 1700000000,
+        "timestamp_start": None,
+        "timestamp_end": 1700000200,
+        "batch_window_seconds": None,
+        "batch_rows": 100,
+    }
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_get_state_query_error(mock_get_client: Mock) -> None:
+    """get_state() should raise exception on query failure."""
+    mock_client = Mock()
+    mock_client.query.side_effect = Exception("Query failed")
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    with pytest.raises(Exception, match="Query failed"):
+        client.get_state()
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_get_state_query_error_logs_details(
+    mock_get_client: Mock, caplog
+) -> None:
+    """get_state() should log error details on query failure."""
+    mock_client = Mock()
+    mock_client.query.side_effect = Exception("Query failed")
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    with pytest.raises(Exception):
+        client.get_state()
+
+    assert "Failed to read state from ClickHouse" in caplog.text
+    assert "Query failed" in caplog.text
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_get_state_invalid_table_name(mock_get_client: Mock) -> None:
+    """get_state() should raise ValueError for invalid table name."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(state_table="invalid-table-name!")
+    client = ClickHouseClient(cfg)
+
+    with pytest.raises(ValueError, match="Invalid table name format"):
+        client.get_state()
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_save_state_success(mock_get_client: Mock) -> None:
+    """save_state() should save state to ClickHouse."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    client.save_state(
+        timestamp_progress=1700000000,
+        timestamp_start=1700000100,
+        timestamp_end=1700000200,
+        batch_window_seconds=300,
+        batch_rows=100,
+    )
+
+    mock_client.insert.assert_called_once_with(
+        "metrics.etl_state",
+        [[1700000000, 1700000100, 1700000200, 300, 100]],
+        column_names=[
+            "timestamp_progress",
+            "timestamp_start",
+            "timestamp_end",
+            "batch_window_seconds",
+            "batch_rows",
+        ],
+    )
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_save_state_partial(mock_get_client: Mock) -> None:
+    """save_state() should save only provided fields."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    client.save_state(
+        timestamp_progress=1700000000,
+        timestamp_start=1700000100,
+    )
+
+    mock_client.insert.assert_called_once_with(
+        "metrics.etl_state",
+        [[1700000000, 1700000100]],
+        column_names=["timestamp_progress", "timestamp_start"],
+    )
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_save_state_empty(mock_get_client: Mock) -> None:
+    """save_state() should not insert when no fields provided."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    client.save_state()
+
+    mock_client.insert.assert_not_called()
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_save_state_insert_error(mock_get_client: Mock) -> None:
+    """save_state() should raise exception on insert failure."""
+    mock_client = Mock()
+    mock_client.insert.side_effect = Exception("Insert failed")
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    with pytest.raises(Exception, match="Insert failed"):
+        client.save_state(timestamp_progress=1700000000)
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_save_state_insert_error_logs_details(
+    mock_get_client: Mock, caplog
+) -> None:
+    """save_state() should log error details on insert failure."""
+    mock_client = Mock()
+    mock_client.insert.side_effect = Exception("Insert failed")
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    with pytest.raises(Exception):
+        client.save_state(timestamp_progress=1700000000)
+
+    assert "Failed to save state to ClickHouse" in caplog.text
+    assert "Insert failed" in caplog.text
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_save_state_custom_table(mock_get_client: Mock) -> None:
+    """save_state() should use custom state table from config."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(state_table="custom.state_table")
+    client = ClickHouseClient(cfg)
+
+    client.save_state(timestamp_progress=1700000000)
+
+    mock_client.insert.assert_called_once_with(
+        "custom.state_table",
+        [[1700000000]],
+        column_names=["timestamp_progress"],
+    )

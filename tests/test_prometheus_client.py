@@ -123,15 +123,15 @@ def test_prometheus_client_query_range_success(mock_get: Mock) -> None:
     mock_response.raise_for_status.return_value = None
     mock_get.return_value = mock_response
 
-    result = client.query_range("up", start=1700000000.0, end=1700000300.0, step="300s")
+    result = client.query_range("up", start=1700000000, end=1700000300, step="300s")
 
     assert result["status"] == "success"
     assert "data" in result
     mock_get.assert_called_once()
     call_kwargs = mock_get.call_args[1]
     assert call_kwargs["params"]["query"] == "up"
-    assert call_kwargs["params"]["start"] == 1700000000.0
-    assert call_kwargs["params"]["end"] == 1700000300.0
+    assert call_kwargs["params"]["start"] == 1700000000
+    assert call_kwargs["params"]["end"] == 1700000300
     assert call_kwargs["params"]["step"] == "300s"
 
 
