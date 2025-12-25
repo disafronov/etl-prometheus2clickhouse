@@ -71,6 +71,7 @@ docker-run: ## Run Docker container
 	@echo "Running Docker container..."
 	docker run --rm \
 		--env-file env.example \
+		--env-file env.docker \
 		$(if $(wildcard .env),--env-file .env) \
 		$(DOCKER_IMAGE)
 
