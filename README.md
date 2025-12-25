@@ -54,7 +54,9 @@ for the full list. The most important variables:
 - `PROMETHEUS_URL` – Prometheus/Mimir base URL;
   - Optional basic auth: set `PROMETHEUS_USER` and `PROMETHEUS_PASSWORD`;
   - Set `PROMETHEUS_INSECURE=1` to disable TLS verification;
-- `CLICKHOUSE_URL`, `CLICKHOUSE_TABLE` – ClickHouse HTTP URL and table name;
+- `CLICKHOUSE_URL` – ClickHouse HTTP URL (required);
+  - `CLICKHOUSE_TABLE` – table name for metrics (default: `default.metrics`);
+  - `CLICKHOUSE_STATE_TABLE` – table name for ETL state (default: `default.etl`);
   - Optional: `CLICKHOUSE_USER` and `CLICKHOUSE_PASSWORD` for authentication;
   - Set `CLICKHOUSE_INSECURE=1` to disable TLS verification;
 - `PUSHGATEWAY_URL`, `PUSHGATEWAY_JOB`, `PUSHGATEWAY_INSTANCE` – PushGateway
@@ -109,7 +111,7 @@ Recommended table engine: `ReplacingMergeTree` or a table with deduplication
 enabled. The table schema should match the following structure:
 
 ```sql
-CREATE TABLE default.prometheus_raw (
+CREATE TABLE default.metrics (
     timestamp DateTime,
     metric_name String,
     labels String,
