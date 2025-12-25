@@ -43,8 +43,10 @@ class PushGatewayClient:
 
         if config.token:
             self._headers["Authorization"] = f"Bearer {config.token}"
-        # Use is not None to allow empty string passwords
-        # Empty string "" is different from None for HTTP Basic Auth
+        # Password is normalized by PushGatewayConfig validator: if user is
+        # specified but password is None, it's converted to empty string "".
+        # Empty string "" is different from None for HTTP Basic Auth.
+        # After normalization, password will be either explicitly set or "" (not None).
         elif config.user is not None and config.password is not None:
             self._auth = (config.user, config.password)
 

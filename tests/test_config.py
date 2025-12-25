@@ -125,3 +125,44 @@ def test_prometheus_config_keeps_none_password_when_no_user(monkeypatch) -> None
 
     # Password should remain None when no user is specified
     assert cfg.password is None
+
+
+def test_pushgateway_config_normalizes_password_when_user_specified(
+    monkeypatch,
+) -> None:
+    """PushGatewayConfig should normalize None password to "" when user is set.
+
+    This handles the case when PUSHGATEWAY_PASSWORD is set to empty string
+    in environment variables and env_ignore_empty=True converts it to None.
+    """
+    from config import PushGatewayConfig
+
+    # Simulate env_ignore_empty=True behavior: empty string becomes None
+    cfg = PushGatewayConfig(
+        _env_file=[],  # Disable .env file reading
+        url="http://pg:9091",
+        job="test_job",
+        instance="test_instance",
+        user="testuser",
+        password=None,  # This should be normalized to ""
+    )
+
+    # Password should be normalized to empty string by validator
+    assert cfg.password == ""
+
+
+def test_pushgateway_config_keeps_none_password_when_no_user(monkeypatch) -> None:
+    """PushGatewayConfig should keep None password when no user is specified."""
+    from config import PushGatewayConfig
+
+    cfg = PushGatewayConfig(
+        _env_file=[],  # Disable .env file reading
+        url="http://pg:9091",
+        job="test_job",
+        instance="test_instance",
+        user=None,
+        password=None,
+    )
+
+    # Password should remain None when no user is specified
+    assert cfg.password is None
