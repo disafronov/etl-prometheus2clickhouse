@@ -90,3 +90,38 @@ def test_clickhouse_config_keeps_none_password_when_no_user(monkeypatch) -> None
 
     # Password should remain None when no user is specified
     assert cfg.password is None
+
+
+def test_prometheus_config_normalizes_password_when_user_specified(monkeypatch) -> None:
+    """PrometheusConfig should normalize None password to empty string when user is set.
+
+    This handles the case when PROMETHEUS_PASSWORD is set to empty string
+    in environment variables and env_ignore_empty=True converts it to None.
+    """
+    from config import PrometheusConfig
+
+    # Simulate env_ignore_empty=True behavior: empty string becomes None
+    cfg = PrometheusConfig(
+        _env_file=[],  # Disable .env file reading
+        url="http://prom:9090",
+        user="testuser",
+        password=None,  # This should be normalized to ""
+    )
+
+    # Password should be normalized to empty string by validator
+    assert cfg.password == ""
+
+
+def test_prometheus_config_keeps_none_password_when_no_user(monkeypatch) -> None:
+    """PrometheusConfig should keep None password when no user is specified."""
+    from config import PrometheusConfig
+
+    cfg = PrometheusConfig(
+        _env_file=[],  # Disable .env file reading
+        url="http://prom:9090",
+        user=None,
+        password=None,
+    )
+
+    # Password should remain None when no user is specified
+    assert cfg.password is None
