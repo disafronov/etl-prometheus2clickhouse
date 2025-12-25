@@ -1,6 +1,8 @@
+x-clickhouse-image: &clickhouse-image clickhouse/clickhouse-server:latest
+
 services:
   clickhouse:
-    image: clickhouse/clickhouse-server:latest
+    image: *clickhouse-image
     container_name: clickhouse
     ports:
       - "8123:8123"
@@ -19,21 +21,30 @@ services:
       retries: 5
 
   clickhouse_init:
-    image: curlimages/curl:latest
+    image: *clickhouse-image
     container_name: clickhouse_init
     depends_on:
       clickhouse:
         condition: service_healthy
+    environment:
+      - INIT_TIMESTAMP_PROGRESS=${INIT_TIMESTAMP_PROGRESS:-}
     configs:
-      - source: clickhouse_init_sql
-        target: /init.sql
+      - source: clickhouse_init_sql_metrics
+        target: /init_metrics.sql
+      - source: clickhouse_init_sql_etl
+        target: /init_etl.sql
     command:
       - sh
       - -c
       - |
-        echo "Creating table in ClickHouse..."
-        curl -s http://clickhouse:8123/ --data-binary @/init.sql
+        echo "Creating tables in ClickHouse..."
+        clickhouse-client --host=clickhouse --query="$(cat /init_metrics.sql)"
+        clickhouse-client --host=clickhouse --query="$(cat /init_etl.sql)"
         echo "Table creation completed."
+        TIMESTAMP_PROGRESS=$${INIT_TIMESTAMP_PROGRESS:-$(date +%s)}
+        echo "Setting initial timestamp_progress to: $$TIMESTAMP_PROGRESS"
+        clickhouse-client --host=clickhouse --query="INSERT INTO default.etl (timestamp_progress) VALUES ($$TIMESTAMP_PROGRESS)"
+        echo "Initial timestamp_progress set."
 
   prometheus:
     image: prom/prometheus:latest
@@ -141,7 +152,7 @@ configs:
           secureJsonData: {}
           editable: false
 
-  clickhouse_init_sql:
+  clickhouse_init_sql_metrics:
     content: |
       CREATE TABLE IF NOT EXISTS default.metrics (
           timestamp DateTime,
@@ -151,6 +162,8 @@ configs:
       ) ENGINE = ReplacingMergeTree()
       ORDER BY (timestamp, metric_name, labels);
 
+  clickhouse_init_sql_etl:
+    content: |
       CREATE TABLE IF NOT EXISTS default.etl (
           timestamp_progress Nullable(Int64),
           timestamp_start Nullable(Int64),
@@ -158,7 +171,8 @@ configs:
           batch_window_seconds Nullable(Int64),
           batch_rows Nullable(Int64)
       ) ENGINE = ReplacingMergeTree()
-      ORDER BY (timestamp_progress, timestamp_start, timestamp_end);
+      ORDER BY (timestamp_progress, timestamp_start, timestamp_end)
+      SETTINGS allow_nullable_key = 1;
 
 volumes:
   clickhouse_data:
