@@ -1,6 +1,6 @@
 {
   "etl-prometheus2clickhouse": {
-    "v2": {
+    "v3": {
       "main": {
         "application_error": {
           "error": {
@@ -252,11 +252,11 @@
         },
         "fetch_data_empty_result": {
           "window_start": {
-            "type": "float",
+            "type": "int",
             "source": "etl_job.fetch_data_empty_result.window_start"
           },
           "window_end": {
-            "type": "float",
+            "type": "int",
             "source": "etl_job.fetch_data_empty_result.window_end"
           },
           "step": {
@@ -274,11 +274,11 @@
             "source": "etl_job.fetch_data_success.rows_count"
           },
           "window_start": {
-            "type": "float",
+            "type": "int",
             "source": "etl_job.fetch_data_success.window_start"
           },
           "window_end": {
-            "type": "float",
+            "type": "int",
             "source": "etl_job.fetch_data_success.window_end"
           },
           "file_path": {
