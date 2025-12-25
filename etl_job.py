@@ -133,7 +133,6 @@ class EtlJob:
     def _read_state_field(self, field_name: str) -> int | None:
         """Read single state field from ClickHouse.
 
-        Replaces _read_gauge() for reading from ClickHouse instead of Prometheus.
         Returns None if field doesn't exist, allowing caller to distinguish
         between "field missing" and "field has value 0".
 
@@ -457,7 +456,7 @@ class EtlJob:
 
         Loads data from JSONL file and inserts into ClickHouse. If this fails,
         no progress is updated, allowing job to retry the same window on next run.
-        Empty file is handled gracefully (no-op).
+        Empty files are handled gracefully by insert_from_file() (no-op).
 
         Args:
             file_path: Path to JSONL file with data in JSONEachRow format
@@ -465,11 +464,6 @@ class EtlJob:
         Raises:
             Exception: If ClickHouse insert fails
         """
-        # Check if file is empty (no rows to write)
-        if os.path.getsize(file_path) == 0:
-            logger.info("No rows to write (empty result from Prometheus)")
-            return
-
         try:
             self._ch.insert_from_file(file_path)
             logger.info(f"Successfully wrote data to ClickHouse from file {file_path}")
