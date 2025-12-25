@@ -1,3 +1,11 @@
+## [1.0.0-rc.6](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0-rc.5...v1.0.0-rc.6) (2025-12-25)
+
+### Features
+
+* enhance password normalization in PushGateway configuration ([4ddef6d](https://github.com/disafronov/etl-prometheus2clickhouse/commit/4ddef6d320e707555857151b24e849e83b14306f))
+* normalize ClickHouse password handling in configuration ([b53ca41](https://github.com/disafronov/etl-prometheus2clickhouse/commit/b53ca4107ed31d4c278cfd6fd96286178d0f3a74))
+* normalize password handling in Prometheus configuration ([c373365](https://github.com/disafronov/etl-prometheus2clickhouse/commit/c3733652fd5b7626125e8589dd2f352927de4270))
+
 ## [1.0.0-rc.5](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0-rc.4...v1.0.0-rc.5) (2025-12-25)
 
 ## [1.0.0-rc.4](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0-rc.3...v1.0.0-rc.4) (2025-12-25)
