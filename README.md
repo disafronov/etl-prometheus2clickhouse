@@ -105,8 +105,8 @@ Metrics table:
 ```sql
 CREATE TABLE default.metrics (
     timestamp DateTime,
-    metric_name String,
-    labels String,
+    metric_name String CODEC(ZSTD(3)),
+    labels String CODEC(ZSTD(3)),
     value Float64
 ) ENGINE = ReplacingMergeTree()
 ORDER BY (timestamp, metric_name, labels);
@@ -116,11 +116,11 @@ ETL state table:
 
 ```sql
 CREATE TABLE default.etl (
-    timestamp_start Nullable(Int64),
-    timestamp_end Nullable(Int64),
-    timestamp_progress Nullable(Int64),
-    batch_window_seconds Nullable(Int64),
-    batch_rows Nullable(Int64)
+    timestamp_start Nullable(Int64) CODEC(ZSTD(3)),
+    timestamp_end Nullable(Int64) CODEC(ZSTD(3)),
+    timestamp_progress Nullable(Int64) CODEC(ZSTD(3)),
+    batch_window_seconds Nullable(Int64) CODEC(ZSTD(3)),
+    batch_rows Nullable(Int64) CODEC(ZSTD(3))
 ) ENGINE = ReplacingMergeTree()
 ORDER BY (timestamp_start)
 SETTINGS allow_nullable_key = 1;
