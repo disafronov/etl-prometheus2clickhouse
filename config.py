@@ -198,7 +198,8 @@ class EtlConfig(BaseSettings):
     """ETL job configuration options.
 
     Controls ETL processing behavior. Batch window size determines how much
-    data is processed in each iteration.
+    data is processed in each iteration. Overlap creates overlap between windows
+    to avoid missing data at boundaries.
     """
 
     model_config = SettingsConfigDict(
@@ -208,10 +209,18 @@ class EtlConfig(BaseSettings):
         env_ignore_empty=True,
     )
 
-    batch_window_seconds: int = Field(
+    batch_window_size_seconds: int = Field(
         default=300,
-        validation_alias="BATCH_WINDOW_SECONDS",
+        validation_alias="BATCH_WINDOW_SIZE_SECONDS",
         description="Processing window size in seconds for each batch",
+    )
+    batch_window_overlap_seconds: int = Field(
+        default=0,
+        validation_alias="BATCH_WINDOW_OVERLAP_SECONDS",
+        description=(
+            "Overlap in seconds. Window starts at (progress - overlap) to "
+            "ensure no data is missed at boundaries. Default is 0 (no overlap)."
+        ),
     )
     log_level: str = Field(
         default="INFO",

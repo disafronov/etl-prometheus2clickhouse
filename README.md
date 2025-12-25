@@ -61,7 +61,9 @@ for the full list. The most important variables:
   endpoint and labels;
   - Optional: `PUSHGATEWAY_TOKEN` (Bearer) or `PUSHGATEWAY_USER`/`PUSHGATEWAY_PASS` (Basic auth);
   - Set `PUSHGATEWAY_INSECURE=1` to disable TLS verification;
-- `BATCH_WINDOW_SECONDS` – processing window size in seconds;
+- `BATCH_WINDOW_SIZE_SECONDS` – processing window size in seconds;
+- `BATCH_WINDOW_OVERLAP_SECONDS` – overlap in seconds to avoid missing data at
+  boundaries;
 - `LOG_LEVEL` – logging level (default: `INFO`).
 
 ## Running
