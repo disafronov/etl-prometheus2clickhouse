@@ -331,6 +331,28 @@ def test_clickhouse_client_insert_rows_insert_error(mock_get_client: Mock) -> No
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_insert_rows_invalid_table_name(
+    mock_get_client: Mock,
+) -> None:
+    """insert_rows() should raise ValueError for invalid table name."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(table_metrics="invalid-table-name!")
+    client = ClickHouseClient(cfg)
+
+    rows = [
+        {"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0},
+    ]
+
+    with pytest.raises(ValueError, match="Invalid table name format"):
+        client.insert_rows(rows)
+
+    # Verify that insert was not called due to validation error
+    mock_client.insert.assert_not_called()
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
 @patch("clickhouse_client.logger")
 def test_clickhouse_client_insert_rows_insert_error_logs_details(
     mock_logger: Mock, mock_get_client: Mock
@@ -388,6 +410,30 @@ def test_clickhouse_client_insert_from_file_success(
         "value",
     ]
     assert call_args[1]["format_"] == "JSONEachRow"
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_insert_from_file_invalid_table_name(
+    mock_get_client: Mock, tmp_path
+) -> None:
+    """insert_from_file() should raise ValueError for invalid table name."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(table_metrics="invalid-table-name!")
+    client = ClickHouseClient(cfg)
+
+    # Create test file
+    file_path = tmp_path / "test.jsonl"
+    file_path.write_text(
+        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+    )
+
+    with pytest.raises(ValueError, match="Invalid table name format"):
+        client.insert_from_file(str(file_path))
+
+    # Verify that insert_file was not called due to validation error
+    mock_client.insert_file.assert_not_called()
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
