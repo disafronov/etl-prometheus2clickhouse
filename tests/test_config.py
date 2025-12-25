@@ -11,12 +11,12 @@ def test_load_config_from_env(monkeypatch) -> None:
     """Config should load required values from environment."""
     monkeypatch.setenv("PROMETHEUS_URL", "http://prom:9090")
     monkeypatch.setenv("CLICKHOUSE_URL", "http://ch:8123")
-    monkeypatch.setenv("CLICKHOUSE_TABLE", "db.tbl")
+    monkeypatch.setenv("CLICKHOUSE_TABLE_METRICS", "db.tbl")
 
     config = load_config()
 
     assert config.prometheus.url == "http://prom:9090"
-    assert config.clickhouse.table == "db.tbl"
+    assert config.clickhouse.table_metrics == "db.tbl"
     assert config.etl.batch_window_size_seconds > 0
 
 
@@ -24,7 +24,7 @@ def test_load_config_clickhouse_timeouts_from_env(monkeypatch) -> None:
     """Config should load ClickHouse timeout values from environment."""
     monkeypatch.setenv("PROMETHEUS_URL", "http://prom:9090")
     monkeypatch.setenv("CLICKHOUSE_URL", "http://ch:8123")
-    monkeypatch.setenv("CLICKHOUSE_TABLE", "db.tbl")
+    monkeypatch.setenv("CLICKHOUSE_TABLE_METRICS", "db.tbl")
     monkeypatch.setenv("CLICKHOUSE_CONNECT_TIMEOUT", "30")
     monkeypatch.setenv("CLICKHOUSE_SEND_RECEIVE_TIMEOUT", "600")
 
@@ -39,7 +39,7 @@ def test_load_config_validation_error_missing_required_field(monkeypatch) -> Non
     # Remove required field
     monkeypatch.delenv("PROMETHEUS_URL", raising=False)
     monkeypatch.setenv("CLICKHOUSE_URL", "http://ch:8123")
-    monkeypatch.setenv("CLICKHOUSE_TABLE", "db.tbl")
+    monkeypatch.setenv("CLICKHOUSE_TABLE_METRICS", "db.tbl")
 
     with pytest.raises(ValueError, match="Configuration validation failed"):
         load_config()
@@ -57,7 +57,7 @@ def test_clickhouse_config_normalizes_password_when_user_specified(monkeypatch) 
     cfg = ClickHouseConfig(
         _env_file=[],  # Disable .env file reading
         url="http://ch:8123",
-        table="db.tbl",
+        table_metrics="db.tbl",
         user="default",
         password=None,  # This should be normalized to ""
     )
@@ -73,7 +73,7 @@ def test_clickhouse_config_keeps_none_password_when_no_user(monkeypatch) -> None
     cfg = ClickHouseConfig(
         _env_file=[],  # Disable .env file reading
         url="http://ch:8123",
-        table="db.tbl",
+        table_metrics="db.tbl",
         user=None,
         password=None,
     )
@@ -117,8 +117,8 @@ def test_prometheus_config_keeps_none_password_when_no_user(monkeypatch) -> None
     assert cfg.password is None
 
 
-def test_clickhouse_config_has_default_table(monkeypatch) -> None:
-    """ClickHouseConfig should have default table name when not specified."""
+def test_clickhouse_config_has_default_table_metrics(monkeypatch) -> None:
+    """ClickHouseConfig should have default table_metrics name when not specified."""
     from config import ClickHouseConfig
 
     cfg = ClickHouseConfig(
@@ -127,7 +127,7 @@ def test_clickhouse_config_has_default_table(monkeypatch) -> None:
     )
 
     # Table should have default value
-    assert cfg.table == "default.metrics"
+    assert cfg.table_metrics == "default.metrics"
 
 
 def test_clickhouse_config_has_default_table_state(monkeypatch) -> None:
@@ -137,7 +137,7 @@ def test_clickhouse_config_has_default_table_state(monkeypatch) -> None:
     cfg = ClickHouseConfig(
         _env_file=[],  # Disable .env file reading
         url="http://ch:8123",
-        table="db.tbl",
+        table_metrics="db.tbl",
     )
 
     # State table should have default value
