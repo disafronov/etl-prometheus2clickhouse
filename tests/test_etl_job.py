@@ -227,7 +227,7 @@ def test_etl_job_run_once_success() -> None:
     assert len(ch.inserts) == 1
     assert len(ch.inserts[0]) == 2  # Two data points
     assert ch._state["timestamp_progress"] is not None
-    assert ch._state["batch_rows"] == 2.0
+    assert ch._state["batch_rows"] == 2
 
 
 def test_etl_job_run_once_cannot_start_when_end_less_than_start() -> None:
@@ -818,7 +818,7 @@ def test_etl_job_run_once_handles_empty_result_from_prometheus() -> None:
     assert ch._state["timestamp_progress"] is not None
     # Progress should still advance
     assert ch._state["timestamp_progress"] == 1700000300
-    assert ch._state["batch_rows"] == 0.0
+    assert ch._state["batch_rows"] == 0
 
 
 def test_etl_job_run_once_prevents_progress_from_going_into_future() -> None:
