@@ -115,7 +115,7 @@ class ClickHouseConfig(BaseSettings):
         default="default.metrics",
         description="Target table name for inserts",
     )
-    table_state: str = Field(
+    table_etl: str = Field(
         default="default.etl",
         description="Table name for storing ETL job state",
     )
