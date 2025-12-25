@@ -134,3 +134,85 @@ class ClickHouseClient:
                 },
             )
             raise
+
+    def insert_from_file(self, file_path: str) -> None:
+        """Insert rows from JSONL file into configured table.
+
+        Loads data from file in JSONEachRow format and inserts into ClickHouse.
+        This method is memory-efficient as it streams data from file without
+        loading entire file into memory.
+
+        Args:
+            file_path: Path to JSONL file with data in JSONEachRow format.
+                Each line must be a JSON object with keys: timestamp, metric_name,
+                labels (JSON string), and value.
+
+        Raises:
+            FileNotFoundError: If file doesn't exist
+            Exception: If ClickHouse insert operation fails
+        """
+        import os
+
+        if not os.path.exists(file_path):
+            error_msg = f"File not found: {file_path}"
+            logger.error(
+                error_msg,
+                extra={
+                    "clickhouse_client.insert_from_file_failed.error": error_msg,
+                    "clickhouse_client.insert_from_file_failed.file_path": file_path,
+                    "clickhouse_client.insert_from_file_failed.table": self._table,
+                },
+            )
+            raise FileNotFoundError(error_msg)
+
+        try:
+            # Use insert_file method if available, otherwise fall back to raw_query
+            # clickhouse-connect supports insert_file for streaming file uploads
+            # Format: JSONEachRow matches our JSONL format (one JSON object per line)
+            # Type ignore: insert_file may not be available in all versions,
+            # we catch AttributeError if it's missing
+            with open(file_path, "rb") as f:
+                self._client.insert_file(  # type: ignore[attr-defined]
+                    self._table,
+                    f,
+                    column_names=["timestamp", "metric_name", "labels", "value"],
+                    format_="JSONEachRow",
+                )
+        except AttributeError:
+            # Fallback: if insert_file is not available, use raw_query with
+            # INSERT FROM FILE. This requires file to be accessible by ClickHouse
+            # server, which may not work in all deployment scenarios, so we
+            # prefer insert_file.
+            logger.warning(
+                "insert_file method not available, using alternative method",
+                extra={
+                    "clickhouse_client.insert_from_file_method": "fallback",
+                    "clickhouse_client.insert_from_file_failed.file_path": file_path,
+                },
+            )
+            # Read file and insert via standard insert method as fallback
+            # This is less efficient but works when insert_file is unavailable
+            import json
+
+            rows: list[dict[str, Any]] = []
+            with open(file_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    row = json.loads(line)
+                    rows.append(row)
+
+            if rows:
+                self.insert_rows(rows)
+        except Exception as exc:
+            error_details = f"{type(exc).__name__}: {exc}"
+            logger.error(
+                f"Failed to insert from file into ClickHouse: {error_details}",
+                extra={
+                    "clickhouse_client.insert_from_file_failed.error": str(exc),
+                    "clickhouse_client.insert_from_file_failed.file_path": file_path,
+                    "clickhouse_client.insert_from_file_failed.table": self._table,
+                },
+            )
+            raise

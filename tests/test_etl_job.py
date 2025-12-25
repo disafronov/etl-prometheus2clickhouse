@@ -62,6 +62,7 @@ class DummyClickHouseClient:
 
     def __init__(self) -> None:
         self.inserts: list[list[dict[str, Any]]] = []
+        self.insert_from_file_calls: list[str] = []
         self._should_fail = False
 
     def set_should_fail(self, should_fail: bool) -> None:
@@ -73,6 +74,29 @@ class DummyClickHouseClient:
         if self._should_fail:
             raise Exception("ClickHouse insert failed")
         self.inserts.append(rows)
+
+    def insert_from_file(self, file_path: str) -> None:
+        """Mock insert_from_file method."""
+        if self._should_fail:
+            raise Exception("ClickHouse insert failed")
+        self.insert_from_file_calls.append(file_path)
+        # For testing purposes, read file and store as rows
+        import json
+        import os
+
+        if os.path.getsize(file_path) == 0:
+            return
+
+        rows: list[dict[str, Any]] = []
+        with open(file_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                row = json.loads(line)
+                rows.append(row)
+        if rows:
+            self.inserts.append(rows)
 
 
 class DummyPushGatewayClient:
@@ -118,22 +142,34 @@ class DummyPushGatewayClient:
         )
 
 
-def _make_config() -> Config:
+def _make_config(**kwargs: object) -> Config:
     """Create minimal valid Config for tests."""
+    import tempfile
+
+    etl_kwargs = kwargs.pop("etl", {})
+    if "temp_dir" not in etl_kwargs:
+        etl_kwargs["temp_dir"] = tempfile.gettempdir()
+
     return Config(
         prometheus=PrometheusConfig(
             url="http://prom:9090",
+            **{k: v for k, v in kwargs.items() if k.startswith("prometheus_")},
         ),
         clickhouse=ClickHouseConfig(
             url="http://ch:8123",
             table="db.tbl",
+            **{k: v for k, v in kwargs.items() if k.startswith("clickhouse_")},
         ),
         pushgateway=PushGatewayConfig(
             url="http://pg:9091",
             job="job",
             instance="inst",
+            **{k: v for k, v in kwargs.items() if k.startswith("pushgateway_")},
         ),
-        etl=EtlConfig(batch_window_size_seconds=300),  # overlap defaults to 0
+        etl=EtlConfig(
+            batch_window_size_seconds=300,  # overlap defaults to 0
+            **etl_kwargs,
+        ),
     )
 
 
