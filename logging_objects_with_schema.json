@@ -1,6 +1,6 @@
 {
   "etl-prometheus2clickhouse": {
-    "v4": {
+    "v5": {
       "main": {
         "application_error": {
           "error": {
@@ -258,12 +258,20 @@
           "message": {
             "type": "str",
             "source": "etl_job.write_failed.message"
+          },
+          "file_path": {
+            "type": "str",
+            "source": "etl_job.write_failed.file_path"
           }
         },
-        "save_metrics_failed": {
+        "fetch_write_failed": {
           "message": {
             "type": "str",
-            "source": "etl_job.save_metrics_failed.message"
+            "source": "etl_job.fetch_write_failed.message"
+          },
+          "file_path": {
+            "type": "str",
+            "source": "etl_job.fetch_write_failed.file_path"
           }
         },
         "read_state_failed": {
