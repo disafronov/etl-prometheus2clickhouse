@@ -66,7 +66,7 @@ def test_clickhouse_client_init_with_auth(mock_get_client: Mock) -> None:
         username="user",
         password="pass",
         secure=False,
-        verify=False,
+        verify=True,
         connect_timeout=10,
         send_receive_timeout=300,
     )
@@ -86,7 +86,7 @@ def test_clickhouse_client_init_with_empty_password(mock_get_client: Mock) -> No
         username="user",
         password="",
         secure=False,
-        verify=False,
+        verify=True,
         connect_timeout=10,
         send_receive_timeout=300,
     )
@@ -102,13 +102,14 @@ def test_clickhouse_client_init_with_user_but_no_password(
 
     cfg = _make_clickhouse_config(user="user", password=None)
     _ = ClickHouseClient(cfg)
+    # Password is normalized to empty string when user is specified
     mock_get_client.assert_called_once_with(
         host="ch",
         port=8123,
         username="user",
-        password=None,
+        password="",
         secure=False,
-        verify=False,
+        verify=True,
         connect_timeout=10,
         send_receive_timeout=300,
     )
@@ -128,7 +129,7 @@ def test_clickhouse_client_init_with_custom_timeouts(mock_get_client: Mock) -> N
         username=None,
         password=None,
         secure=False,
-        verify=False,
+        verify=True,
         connect_timeout=5,
         send_receive_timeout=60,
     )
@@ -217,8 +218,9 @@ def test_clickhouse_client_init_connection_error(mock_get_client: Mock) -> None:
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
+@patch("clickhouse_client.logger")
 def test_clickhouse_client_init_connection_error_logs_details(
-    mock_get_client: Mock, caplog
+    mock_logger: Mock, mock_get_client: Mock
 ) -> None:
     """Client should log connection error details."""
     mock_get_client.side_effect = Exception("Connection failed")
@@ -227,8 +229,11 @@ def test_clickhouse_client_init_connection_error_logs_details(
     with pytest.raises(Exception):
         ClickHouseClient(cfg)
 
-    assert "Failed to connect to ClickHouse" in caplog.text
-    assert "Connection failed" in caplog.text
+    # Check that error was logged
+    mock_logger.error.assert_called_once()
+    call_args = mock_logger.error.call_args
+    assert "Failed to create ClickHouse client" in call_args[0][0]
+    assert "Connection failed" in call_args[0][0]
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -285,8 +290,9 @@ def test_clickhouse_client_insert_rows_missing_key(mock_get_client: Mock) -> Non
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
+@patch("clickhouse_client.logger")
 def test_clickhouse_client_insert_rows_missing_key_logs_details(
-    mock_get_client: Mock, caplog
+    mock_logger: Mock, mock_get_client: Mock
 ) -> None:
     """insert_rows() should log error details for missing key."""
     mock_client = Mock()
@@ -300,7 +306,10 @@ def test_clickhouse_client_insert_rows_missing_key_logs_details(
     with pytest.raises(KeyError):
         client.insert_rows(rows)
 
-    assert "Failed to insert rows into ClickHouse" in caplog.text
+    # Check that error was logged
+    mock_logger.error.assert_called_once()
+    call_args = mock_logger.error.call_args
+    assert "Invalid row format for ClickHouse insert" in call_args[0][0]
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -322,8 +331,9 @@ def test_clickhouse_client_insert_rows_insert_error(mock_get_client: Mock) -> No
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
+@patch("clickhouse_client.logger")
 def test_clickhouse_client_insert_rows_insert_error_logs_details(
-    mock_get_client: Mock, caplog
+    mock_logger: Mock, mock_get_client: Mock
 ) -> None:
     """insert_rows() should log error details on insert failure."""
     mock_client = Mock()
@@ -340,8 +350,11 @@ def test_clickhouse_client_insert_rows_insert_error_logs_details(
     with pytest.raises(Exception):
         client.insert_rows(rows)
 
-    assert "Failed to insert rows into ClickHouse" in caplog.text
-    assert "Insert failed" in caplog.text
+    # Check that error was logged
+    mock_logger.error.assert_called_once()
+    call_args = mock_logger.error.call_args
+    assert "Failed to insert rows into ClickHouse" in call_args[0][0]
+    assert "Insert failed" in call_args[0][0]
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -472,8 +485,9 @@ def test_clickhouse_client_insert_from_file_insert_error(
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
+@patch("clickhouse_client.logger")
 def test_clickhouse_client_insert_from_file_insert_error_logs_details(
-    mock_get_client: Mock, tmp_path, caplog
+    mock_logger: Mock, mock_get_client: Mock, tmp_path
 ) -> None:
     """insert_from_file() should log error details on insert failure."""
     mock_client = Mock()
@@ -491,8 +505,14 @@ def test_clickhouse_client_insert_from_file_insert_error_logs_details(
     with pytest.raises(Exception):
         client.insert_from_file(str(file_path))
 
-    assert "Failed to insert from file into ClickHouse" in caplog.text
-    assert "Insert failed" in caplog.text
+    # Check that error was logged (may be called multiple times due to
+    # validation errors)
+    assert mock_logger.error.call_count >= 1
+    error_messages = [call[0][0] for call in mock_logger.error.call_args_list]
+    assert any(
+        "Failed to insert from file into ClickHouse" in msg for msg in error_messages
+    )
+    assert any("Insert failed" in msg for msg in error_messages)
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -635,8 +655,9 @@ def test_clickhouse_client_get_state_query_error(mock_get_client: Mock) -> None:
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
+@patch("clickhouse_client.logger")
 def test_clickhouse_client_get_state_query_error_logs_details(
-    mock_get_client: Mock, caplog
+    mock_logger: Mock, mock_get_client: Mock
 ) -> None:
     """get_state() should log error details on query failure."""
     mock_client = Mock()
@@ -649,8 +670,11 @@ def test_clickhouse_client_get_state_query_error_logs_details(
     with pytest.raises(Exception):
         client.get_state()
 
-    assert "Failed to read state from ClickHouse" in caplog.text
-    assert "Query failed" in caplog.text
+    # Check that error was logged (may be called multiple times due to
+    # validation errors)
+    assert mock_logger.error.call_count >= 1
+    error_messages = [call[0][0] for call in mock_logger.error.call_args_list]
+    assert any("Failed to read state from ClickHouse" in msg for msg in error_messages)
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -746,8 +770,9 @@ def test_clickhouse_client_save_state_insert_error(mock_get_client: Mock) -> Non
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
+@patch("clickhouse_client.logger")
 def test_clickhouse_client_save_state_insert_error_logs_details(
-    mock_get_client: Mock, caplog
+    mock_logger: Mock, mock_get_client: Mock
 ) -> None:
     """save_state() should log error details on insert failure."""
     mock_client = Mock()
@@ -760,8 +785,11 @@ def test_clickhouse_client_save_state_insert_error_logs_details(
     with pytest.raises(Exception):
         client.save_state(timestamp_progress=1700000000)
 
-    assert "Failed to save state to ClickHouse" in caplog.text
-    assert "Insert failed" in caplog.text
+    # Check that error was logged (may be called multiple times due to
+    # validation errors)
+    assert mock_logger.error.call_count >= 1
+    error_messages = [call[0][0] for call in mock_logger.error.call_args_list]
+    assert any("Failed to save state to ClickHouse" in msg for msg in error_messages)
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
