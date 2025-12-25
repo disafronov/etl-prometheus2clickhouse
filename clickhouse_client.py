@@ -121,6 +121,12 @@ class ClickHouseClient:
             )
             raise FileNotFoundError(error_msg)
 
+        # Check if file is empty (no rows to insert)
+        # This avoids unnecessary HTTP POST request for empty files
+        if os.path.getsize(file_path) == 0:
+            logger.info("No rows to insert (empty file)")
+            return
+
         self._validate_table_name(self._table_metrics, "table_metrics")
 
         # Use HTTP POST with streaming file upload

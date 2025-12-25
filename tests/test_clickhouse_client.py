@@ -390,13 +390,9 @@ def test_clickhouse_client_insert_from_file_not_found(
 def test_clickhouse_client_insert_from_file_empty_file(
     mock_get_client: Mock, mock_requests_post: Mock, tmp_path
 ) -> None:
-    """insert_from_file() should handle empty file."""
+    """insert_from_file() should handle empty file without HTTP POST."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
-
-    mock_response = Mock()
-    mock_response.raise_for_status = Mock()
-    mock_requests_post.return_value = mock_response
 
     cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
@@ -407,9 +403,8 @@ def test_clickhouse_client_insert_from_file_empty_file(
 
     client.insert_from_file(str(file_path))
 
-    # Empty file still calls HTTP POST (but with empty data)
-    mock_requests_post.assert_called_once()
-    mock_response.raise_for_status.assert_called_once()
+    # Empty file should not call HTTP POST to avoid unnecessary request
+    mock_requests_post.assert_not_called()
 
 
 @patch("clickhouse_client.requests.post")
