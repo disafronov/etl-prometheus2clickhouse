@@ -14,7 +14,10 @@ Implements the ETL algorithm:
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 import time
+from pathlib import Path
 from typing import Any
 
 from clickhouse_client import ClickHouseClient
@@ -88,8 +91,16 @@ class EtlJob:
 
         logger.info(f"Processing window: {int(window_start)} - {int(window_end)}")
 
-        rows = self._fetch_data(window_start, window_end)
-        self._write_rows(rows)
+        file_path, rows_count = self._fetch_data(window_start, window_end)
+        try:
+            self._write_rows(file_path)
+        finally:
+            # Always clean up temporary file, even if write fails
+            try:
+                os.unlink(file_path)
+            except Exception:  # nosec B110
+                # Ignore cleanup errors (file may not exist or already deleted)
+                pass
 
         # Calculate new progress, but never exceed current time to avoid going
         # into the future where Prometheus has no data yet
@@ -114,7 +125,7 @@ class EtlJob:
             timestamp_end=timestamp_end,
             timestamp_progress=new_progress,
             window_seconds=int(actual_window),
-            rows_count=len(rows),
+            rows_count=rows_count,
         )
 
     def _read_gauge(self, metric_name: str) -> float | None:
@@ -313,25 +324,24 @@ class EtlJob:
         window_end = progress + window_size
         return window_start, window_end
 
-    def _fetch_data(
-        self, window_start: float, window_end: float
-    ) -> list[dict[str, Any]]:
-        """Fetch data from Prometheus for given window.
+    def _fetch_data(self, window_start: float, window_end: float) -> tuple[str, int]:
+        """Fetch data from Prometheus for given window and write to JSONL file.
 
         Queries all metrics using {__name__=~".+"} selector to export everything
-        available in Prometheus. This ensures complete metric export regardless
-        of metric names or labels.
+        available in Prometheus. Writes data to temporary JSONL file in streaming
+        fashion to minimize memory usage. Each line contains a JSON object with
+        timestamp, metric_name, labels (as JSON string), and value.
 
         Args:
             window_start: Start of time range (Unix timestamp)
             window_end: End of time range (Unix timestamp)
 
         Returns:
-            List of rows, each containing timestamp (int Unix timestamp),
-            metric_name, labels (JSON), and value
+            Tuple of (file_path, rows_count) where file_path is path to JSONL file
+            and rows_count is number of rows written
 
         Raises:
-            Exception: If Prometheus query fails
+            Exception: If Prometheus query fails or file write fails
         """
         try:
             step = f"{self._config.prometheus.query_step_seconds}s"
@@ -352,7 +362,6 @@ class EtlJob:
             raise
 
         result = data.get("data", {}).get("result", [])
-        rows: list[dict[str, Any]] = []
 
         if not result:
             logger.warning(
@@ -363,89 +372,126 @@ class EtlJob:
                     "etl_job.fetch_data_empty_result.step": step,
                 },
             )
-            return rows
+            # Create empty file to maintain consistent interface
+            temp_dir = Path(self._config.etl.temp_dir)
+            temp_dir.mkdir(parents=True, exist_ok=True)
+            fd, file_path = tempfile.mkstemp(
+                suffix=".jsonl", dir=temp_dir, prefix="etl_batch_"
+            )
+            os.close(fd)
+            return file_path, 0
 
-        for series in result:
-            metric = series.get("metric", {})
-            metric_name = metric.get("__name__", "")
-            labels = metric.copy()
-            labels.pop("__name__", None)
+        # Create temporary file for streaming write
+        temp_dir = Path(self._config.etl.temp_dir)
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        fd, file_path = tempfile.mkstemp(
+            suffix=".jsonl", dir=temp_dir, prefix="etl_batch_"
+        )
 
-            for value_pair in series.get("values", []):
-                try:
-                    # ClickHouse DateTime requires integer Unix timestamp
-                    # Prometheus API returns timestamp as integer
-                    # (whole seconds) in JSON
-                    ts = int(value_pair[0])
-                    value = float(value_pair[1])
-                except (TypeError, ValueError, IndexError) as exc:
-                    logger.warning(
-                        "Skipping invalid value pair in Prometheus response",
-                        extra={
-                            "etl_job.invalid_value_pair.metric_name": metric_name,
-                            "etl_job.invalid_value_pair.value_pair": str(value_pair),
-                            "etl_job.invalid_value_pair.error": str(exc),
-                            "etl_job.invalid_value_pair.error_type": type(exc).__name__,
-                        },
-                    )
-                    continue
+        rows_count = 0
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                for series in result:
+                    metric = series.get("metric", {})
+                    metric_name = metric.get("__name__", "")
+                    labels = metric.copy()
+                    labels.pop("__name__", None)
 
-                row = {
-                    "timestamp": ts,
-                    "metric_name": metric_name,
-                    "labels": labels,
-                    "value": value,
-                }
-                rows.append(row)
+                    for value_pair in series.get("values", []):
+                        try:
+                            # ClickHouse DateTime requires integer Unix timestamp
+                            # Prometheus API returns timestamp as integer
+                            # (whole seconds) in JSON
+                            ts = int(value_pair[0])
+                            value = float(value_pair[1])
+                        except (TypeError, ValueError, IndexError) as exc:
+                            logger.warning(
+                                "Skipping invalid value pair in Prometheus response",
+                                extra={
+                                    "etl_job.invalid_value_pair.metric_name": (
+                                        metric_name
+                                    ),
+                                    "etl_job.invalid_value_pair.value_pair": str(
+                                        value_pair
+                                    ),
+                                    "etl_job.invalid_value_pair.error": str(exc),
+                                    "etl_job.invalid_value_pair.error_type": type(
+                                        exc
+                                    ).__name__,
+                                },
+                            )
+                            continue
+
+                        # Serialize labels to JSON string for ClickHouse
+                        labels_json = self._serialize_labels(labels)
+
+                        # Write row as JSON line (JSONEachRow format for ClickHouse)
+                        row = {
+                            "timestamp": ts,
+                            "metric_name": metric_name,
+                            "labels": labels_json,
+                            "value": value,
+                        }
+                        f.write(json.dumps(row, separators=(",", ":")) + "\n")
+                        rows_count += 1
+        except Exception as exc:
+            # Clean up file on error
+            try:
+                os.unlink(file_path)
+            except Exception:  # nosec B110
+                # Ignore cleanup errors
+                pass
+            logger.error(
+                "Failed to write data to temporary file",
+                extra={
+                    "etl_job.fetch_write_failed.message": str(exc),
+                    "etl_job.fetch_write_failed.file_path": file_path,
+                },
+            )
+            raise
 
         logger.info(
-            f"Parsed {len(rows)} data points from {len(result)} metric series",
+            f"Parsed {rows_count} data points from {len(result)} metric series",
             extra={
                 "etl_job.fetch_data_success.series_count": len(result),
-                "etl_job.fetch_data_success.rows_count": len(rows),
+                "etl_job.fetch_data_success.rows_count": rows_count,
                 "etl_job.fetch_data_success.window_start": window_start,
                 "etl_job.fetch_data_success.window_end": window_end,
+                "etl_job.fetch_data_success.file_path": file_path,
             },
         )
 
-        return rows
+        return file_path, rows_count
 
-    def _write_rows(self, rows: list[dict[str, Any]]) -> None:
-        """Write rows to ClickHouse in a single batch.
+    def _write_rows(self, file_path: str) -> None:
+        """Write rows from file to ClickHouse.
 
-        Performs atomic batch insert. If this fails, no progress is updated,
-        allowing job to retry the same window on next run. Empty rows list
-        is handled gracefully (no-op).
+        Loads data from JSONL file and inserts into ClickHouse. If this fails,
+        no progress is updated, allowing job to retry the same window on next run.
+        Empty file is handled gracefully (no-op).
 
         Args:
-            rows: List of rows to insert, each with timestamp (int Unix timestamp),
-                metric_name, labels (JSON string), and value
+            file_path: Path to JSONL file with data in JSONEachRow format
 
         Raises:
             Exception: If ClickHouse insert fails
         """
-        if not rows:
+        import os
+
+        # Check if file is empty (no rows to write)
+        if os.path.getsize(file_path) == 0:
             logger.info("No rows to write (empty result from Prometheus)")
             return
 
         try:
-            self._ch.insert_rows(
-                [
-                    {
-                        "timestamp": row["timestamp"],
-                        "metric_name": row["metric_name"],
-                        "labels": self._serialize_labels(row["labels"]),
-                        "value": row["value"],
-                    }
-                    for row in rows
-                ]
-            )
-            logger.info(f"Successfully wrote {len(rows)} rows to ClickHouse")
+            self._ch.insert_from_file(file_path)
+            logger.info(f"Successfully wrote data to ClickHouse from file {file_path}")
         except Exception as exc:
             logger.error(
                 "Failed to write rows to ClickHouse",
                 extra={
                     "etl_job.write_failed.message": str(exc),
+                    "etl_job.write_failed.file_path": file_path,
                 },
             )
             raise
