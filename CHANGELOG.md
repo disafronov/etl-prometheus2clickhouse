@@ -1,4 +1,4 @@
-## [1.1.0-rc.3](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.1.0-rc.2...v1.1.0-rc.3) (2025-12-25)
+## [2.0.0-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.1.0-rc.2...v2.0.0-rc.1) (2025-12-25)
 
 ### ⚠ BREAKING CHANGES
 
