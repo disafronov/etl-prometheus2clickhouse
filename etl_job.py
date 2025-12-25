@@ -90,10 +90,15 @@ class EtlJob:
         rows = self._fetch_data(window_start, window_end)
         self._write_rows(rows)
 
-        new_progress = progress + self._config.etl.batch_window_seconds
+        # Calculate new progress, but never exceed current time to avoid going
+        # into the future where Prometheus has no data yet
+        current_time = time.time()
+        new_progress = min(
+            progress + self._config.etl.batch_window_seconds, current_time
+        )
         # Ensure timestamp_end is always greater than timestamp_start.
         # TimestampEnd must never equal TimestampStart.
-        timestamp_end = max(time.time(), timestamp_start + 0.001)
+        timestamp_end = max(current_time, timestamp_start + 0.001)
 
         self._push_metrics_after_success(
             timestamp_end=timestamp_end,
