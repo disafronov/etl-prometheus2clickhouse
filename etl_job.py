@@ -119,6 +119,7 @@ class EtlJob:
         timestamp_end = max(current_time, timestamp_start + 1)
 
         self._push_metrics_after_success(
+            timestamp_start=timestamp_start,
             timestamp_end=timestamp_end,
             timestamp_progress=new_progress,
             window_seconds=int(actual_window),
@@ -510,6 +511,7 @@ class EtlJob:
 
     def _push_metrics_after_success(
         self,
+        timestamp_start: int,
         timestamp_end: int,
         timestamp_progress: int,
         window_seconds: int,
@@ -522,7 +524,11 @@ class EtlJob:
         progress is not updated, but data is already in ClickHouse, so next
         run will process the same window again (idempotent behavior).
 
+        Uses the same timestamp_start as the initial start record to update
+        the same row in ReplacingMergeTree (ORDER BY timestamp_start).
+
         Args:
+            timestamp_start: Job start timestamp (same as initial start record)
             timestamp_end: Job completion timestamp
             timestamp_progress: New progress timestamp (old + window_size)
             window_seconds: Size of processed window (for monitoring)
@@ -533,6 +539,7 @@ class EtlJob:
         """
         try:
             self._ch.save_state(
+                timestamp_start=timestamp_start,
                 timestamp_end=timestamp_end,
                 timestamp_progress=timestamp_progress,
                 batch_window_seconds=window_seconds,

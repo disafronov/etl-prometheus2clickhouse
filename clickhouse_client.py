@@ -251,11 +251,10 @@ class ClickHouseClient:
                     timestamp_end,
                     batch_window_seconds,
                     batch_rows
-                FROM {self._table_etl}
-                ORDER BY
-                    timestamp_progress DESC NULLS LAST,
-                    timestamp_start DESC NULLS LAST,
-                    timestamp_end DESC NULLS LAST
+                FROM {self._table_etl} FINAL
+                ORDER BY timestamp_progress DESC NULLS LAST,
+                         timestamp_start DESC NULLS LAST,
+                         timestamp_end DESC NULLS LAST
                 LIMIT 1
             """  # nosec B608
             result = self._client.query(query)
@@ -295,51 +294,91 @@ class ClickHouseClient:
         batch_window_seconds: int | None = None,
         batch_rows: int | None = None,
     ) -> None:
-        """Save ETL state to ClickHouse.
+        """Save or update ETL state in ClickHouse.
 
-        Inserts new state record. ReplacingMergeTree will handle deduplication
-        if needed. All fields are optional - only provided fields are saved.
+        If timestamp_start is provided and there are other fields to update,
+        updates existing record with that timestamp_start using ALTER TABLE UPDATE.
+        Otherwise, inserts new record. All fields are optional - only provided
+        fields are saved/updated.
 
         Args:
             timestamp_progress: Progress timestamp (Unix timestamp in seconds, int)
-            timestamp_start: Start timestamp (Unix timestamp in seconds, int)
+            timestamp_start: Start timestamp (Unix timestamp in seconds, int).
+                If provided along with other fields, updates existing record.
             timestamp_end: End timestamp (Unix timestamp in seconds, int)
             batch_window_seconds: Window size in seconds
             batch_rows: Number of rows processed
 
         Raises:
-            Exception: If insert fails
+            Exception: If insert or update fails
         """
         try:
-            # Build insert with only non-None values
-            columns = []
-            values = []
+            # Check if we should update existing record
+            # Update if timestamp_start is provided AND there are other fields to update
+            other_fields = [
+                timestamp_progress,
+                timestamp_end,
+                batch_window_seconds,
+                batch_rows,
+            ]
+            has_other_fields = any(f is not None for f in other_fields)
 
-            if timestamp_progress is not None:
-                columns.append("timestamp_progress")
-                values.append(timestamp_progress)
-            if timestamp_start is not None:
-                columns.append("timestamp_start")
-                values.append(timestamp_start)
-            if timestamp_end is not None:
-                columns.append("timestamp_end")
-                values.append(timestamp_end)
-            if batch_window_seconds is not None:
-                columns.append("batch_window_seconds")
-                values.append(batch_window_seconds)
-            if batch_rows is not None:
-                columns.append("batch_rows")
-                values.append(batch_rows)
+            if timestamp_start is not None and has_other_fields:
+                # Update existing record by timestamp_start
+                # has_other_fields guarantees at least one field is not None,
+                # so updates will never be empty
+                updates = []
+                if timestamp_progress is not None:
+                    updates.append(f"timestamp_progress = {timestamp_progress}")
+                if timestamp_end is not None:
+                    updates.append(f"timestamp_end = {timestamp_end}")
+                if batch_window_seconds is not None:
+                    updates.append(f"batch_window_seconds = {batch_window_seconds}")
+                if batch_rows is not None:
+                    updates.append(f"batch_rows = {batch_rows}")
 
-            if not columns:
-                return  # Nothing to insert
+                # Table name comes from configuration, not user input.
+                # ClickHouse doesn't support parameterized table names in queries,
+                # so we validate the table name format and use f-string.
+                # Format: database.table or just table
+                # (allowed characters: alphanumeric, underscore, dot)
+                if not all(c.isalnum() or c in ("_", ".") for c in self._table_etl):
+                    raise ValueError(f"Invalid table name format: {self._table_etl}")
+                query = f"""
+                    ALTER TABLE {self._table_etl}
+                    UPDATE {', '.join(updates)}
+                    WHERE timestamp_start = {timestamp_start}
+                """  # nosec B608
+                self._client.command(query)
+            else:
+                # Insert new record
+                columns = []
+                values = []
 
-            # updated_at is set by DEFAULT now()
-            self._client.insert(
-                self._table_etl,
-                [values],
-                column_names=columns,
-            )
+                if timestamp_progress is not None:
+                    columns.append("timestamp_progress")
+                    values.append(timestamp_progress)
+                if timestamp_start is not None:
+                    columns.append("timestamp_start")
+                    values.append(timestamp_start)
+                if timestamp_end is not None:
+                    columns.append("timestamp_end")
+                    values.append(timestamp_end)
+                if batch_window_seconds is not None:
+                    columns.append("batch_window_seconds")
+                    values.append(batch_window_seconds)
+                if batch_rows is not None:
+                    columns.append("batch_rows")
+                    values.append(batch_rows)
+
+                if not columns:
+                    return  # Nothing to insert
+
+                self._client.insert(
+                    self._table_etl,
+                    [values],
+                    column_names=columns,
+                )
         except Exception as exc:
             logger.error(
                 "Failed to save state to ClickHouse",

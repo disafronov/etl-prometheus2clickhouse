@@ -161,8 +161,7 @@ configs:
           timestamp_start Nullable(Int64),
           timestamp_end Nullable(Int64),
           batch_window_seconds Nullable(Int64),
-          batch_rows Nullable(Int64),
-          updated_at DateTime DEFAULT now()
+          batch_rows Nullable(Int64)
       ) ENGINE = ReplacingMergeTree()
       ORDER BY (timestamp_progress, timestamp_start, timestamp_end);
 

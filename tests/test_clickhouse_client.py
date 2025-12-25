@@ -695,7 +695,7 @@ def test_clickhouse_client_get_state_invalid_table_name(mock_get_client: Mock) -
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_save_state_success(mock_get_client: Mock) -> None:
-    """save_state() should save state to ClickHouse."""
+    """save_state() should update state when timestamp_start is provided."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
@@ -710,22 +710,21 @@ def test_clickhouse_client_save_state_success(mock_get_client: Mock) -> None:
         batch_rows=100,
     )
 
-    mock_client.insert.assert_called_once_with(
-        "default.etl",
-        [[1700000000, 1700000100, 1700000200, 300, 100]],
-        column_names=[
-            "timestamp_progress",
-            "timestamp_start",
-            "timestamp_end",
-            "batch_window_seconds",
-            "batch_rows",
-        ],
-    )
+    # When timestamp_start is provided, should use ALTER TABLE UPDATE
+    mock_client.command.assert_called_once()
+    call_args = mock_client.command.call_args[0][0]
+    assert "ALTER TABLE default.etl" in call_args
+    assert "UPDATE" in call_args
+    assert "timestamp_progress = 1700000000" in call_args
+    assert "timestamp_end = 1700000200" in call_args
+    assert "batch_window_seconds = 300" in call_args
+    assert "batch_rows = 100" in call_args
+    assert "WHERE timestamp_start = 1700000100" in call_args
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_save_state_partial(mock_get_client: Mock) -> None:
-    """save_state() should save only provided fields."""
+    """save_state() should update only provided fields when timestamp_start provided."""
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
@@ -737,11 +736,13 @@ def test_clickhouse_client_save_state_partial(mock_get_client: Mock) -> None:
         timestamp_start=1700000100,
     )
 
-    mock_client.insert.assert_called_once_with(
-        "default.etl",
-        [[1700000000, 1700000100]],
-        column_names=["timestamp_progress", "timestamp_start"],
-    )
+    # When timestamp_start is provided, should use ALTER TABLE UPDATE
+    mock_client.command.assert_called_once()
+    call_args = mock_client.command.call_args[0][0]
+    assert "ALTER TABLE default.etl" in call_args
+    assert "UPDATE" in call_args
+    assert "timestamp_progress = 1700000000" in call_args
+    assert "WHERE timestamp_start = 1700000100" in call_args
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -756,6 +757,28 @@ def test_clickhouse_client_save_state_empty(mock_get_client: Mock) -> None:
     client.save_state()
 
     mock_client.insert.assert_not_called()
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_save_state_insert_new_record(mock_get_client: Mock) -> None:
+    """save_state() should insert new record when timestamp_start is not provided."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    client.save_state(
+        timestamp_progress=1700000000,
+        timestamp_end=1700000200,
+    )
+
+    # When timestamp_start is not provided, should use INSERT
+    mock_client.insert.assert_called_once_with(
+        "default.etl",
+        [[1700000000, 1700000200]],
+        column_names=["timestamp_progress", "timestamp_end"],
+    )
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -810,4 +833,117 @@ def test_clickhouse_client_save_state_custom_table(mock_get_client: Mock) -> Non
         "custom.state_table",
         [[1700000000]],
         column_names=["timestamp_progress"],
+    )
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_save_state_update_no_other_fields(
+    mock_get_client: Mock,
+) -> None:
+    """save_state() should insert when timestamp_start provided but no other fields."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    client.save_state(timestamp_start=1700000100)
+
+    # Should not call UPDATE (no other fields to update), but should INSERT
+    mock_client.command.assert_not_called()
+    mock_client.insert.assert_called_once_with(
+        "default.etl",
+        [[1700000100]],
+        column_names=["timestamp_start"],
+    )
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_save_state_update_with_end_only(
+    mock_get_client: Mock,
+) -> None:
+    """save_state() should update when only timestamp_end provided."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    client.save_state(
+        timestamp_start=1700000100,
+        timestamp_end=1700000200,
+    )
+
+    # When timestamp_start is provided, should use ALTER TABLE UPDATE
+    mock_client.command.assert_called_once()
+    call_args = mock_client.command.call_args[0][0]
+    assert "ALTER TABLE default.etl" in call_args
+    assert "UPDATE" in call_args
+    assert "timestamp_end = 1700000200" in call_args
+    assert "WHERE timestamp_start = 1700000100" in call_args
+    # timestamp_progress should not be in update (it's None)
+    assert (
+        "timestamp_progress" not in call_args
+        or "timestamp_progress = None" not in call_args
+    )
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_save_state_update_invalid_table_name(
+    mock_get_client: Mock,
+) -> None:
+    """save_state() should raise ValueError for invalid table name in UPDATE."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(table_etl="invalid-table-name!")
+    client = ClickHouseClient(cfg)
+
+    with pytest.raises(ValueError, match="Invalid table name format"):
+        client.save_state(
+            timestamp_start=1700000100,
+            timestamp_progress=1700000000,
+        )
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_save_state_insert_with_start_only(
+    mock_get_client: Mock,
+) -> None:
+    """save_state() should insert when only timestamp_start provided."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    client.save_state(timestamp_start=1700000100)
+
+    mock_client.insert.assert_called_once_with(
+        "default.etl",
+        [[1700000100]],
+        column_names=["timestamp_start"],
+    )
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_save_state_insert_with_batch_fields(
+    mock_get_client: Mock,
+) -> None:
+    """save_state() should insert with batch_window_seconds and batch_rows."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    client.save_state(
+        batch_window_seconds=300,
+        batch_rows=100,
+    )
+
+    mock_client.insert.assert_called_once_with(
+        "default.etl",
+        [[300, 100]],
+        column_names=["batch_window_seconds", "batch_rows"],
     )
