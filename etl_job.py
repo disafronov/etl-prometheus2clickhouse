@@ -71,12 +71,21 @@ class EtlJob:
         if not self._check_can_start():
             return
 
+        logger.info("Job can start, beginning ETL cycle")
+
         timestamp_start = time.time()
         if not self._mark_start(timestamp_start):
             return
 
+        logger.info(f"Job start marked at {int(timestamp_start)}")
+
         progress = self._load_progress()
         window_start, window_end = self._calc_window(progress)
+
+        logger.info(
+            f"Processing window: {int(window_start)} - {int(window_end)} "
+            f"(progress: {int(progress)})"
+        )
 
         rows = self._fetch_data(window_start, window_end)
         self._write_rows(rows)
@@ -91,6 +100,11 @@ class EtlJob:
             timestamp_progress=new_progress,
             window_seconds=self._config.etl.batch_window_seconds,
             rows_count=len(rows),
+        )
+
+        logger.info(
+            f"ETL cycle completed: progress updated to {int(new_progress)}, "
+            f"processed {len(rows)} rows"
         )
 
     def _read_gauge(self, metric_name: str) -> float | None:
@@ -244,6 +258,7 @@ class EtlJob:
         try:
             progress = self._read_gauge("etl_timestamp_progress")
             if progress is not None:
+                logger.info(f"Loaded progress timestamp: {int(progress)}")
                 return progress
         except Exception as exc:
             logger.error(
@@ -395,6 +410,10 @@ class EtlJob:
         Raises:
             Exception: If ClickHouse insert fails
         """
+        if not rows:
+            logger.info("No rows to write (empty result from Prometheus)")
+            return
+
         try:
             self._ch.insert_rows(
                 [
@@ -407,6 +426,7 @@ class EtlJob:
                     for row in rows
                 ]
             )
+            logger.info(f"Successfully wrote {len(rows)} rows to ClickHouse")
         except Exception as exc:
             logger.error(
                 "Failed to write rows to ClickHouse",
@@ -461,6 +481,10 @@ class EtlJob:
                 timestamp_progress=timestamp_progress,
                 window_seconds=window_seconds,
                 rows_count=rows_count,
+            )
+            logger.info(
+                f"Metrics updated: progress={int(timestamp_progress)}, "
+                f"rows={rows_count}, window={window_seconds}s"
             )
         except Exception as exc:
             logger.error(
