@@ -1,3 +1,27 @@
+## 1.0.0 (2025-12-25)
+
+### Features
+
+* add Docker Compose configuration for ClickHouse, Prometheus, and PushGateway ([cc572ef](https://github.com/disafronov/etl-prometheus2clickhouse/commit/cc572ef9654b5c424ad5b042b03fcbf0a24c8a60))
+* add TLS verification control for ClickHouse and PushGateway clients ([3ad724e](https://github.com/disafronov/etl-prometheus2clickhouse/commit/3ad724e9b69479e9b2869e2e1150b14ce12f5413))
+* enhance error handling for invalid value pairs in ETL job ([1f2696c](https://github.com/disafronov/etl-prometheus2clickhouse/commit/1f2696ce09e7d264f89268770333f1fed9606d77))
+* enhance logging for ETL job data fetching ([85ee163](https://github.com/disafronov/etl-prometheus2clickhouse/commit/85ee16361dfda7138f05ead73c979a44ce789e9a))
+* enhance logging throughout ETL job process ([2e63d5a](https://github.com/disafronov/etl-prometheus2clickhouse/commit/2e63d5ad1083e65eaabf9a4bbfb5096f24dca468))
+* enhance password normalization in PushGateway configuration ([9b50c29](https://github.com/disafronov/etl-prometheus2clickhouse/commit/9b50c29bda87ee7834ab3e17eea345f90007350c))
+* initial ([96c9556](https://github.com/disafronov/etl-prometheus2clickhouse/commit/96c95564fec011a2d17978952426b3586f800b38))
+* introduce batch window overlap configuration for ETL job ([1bb4744](https://github.com/disafronov/etl-prometheus2clickhouse/commit/1bb47442527c8d91a748a645cf6761b47facf1ac))
+* normalize ClickHouse password handling in configuration ([9f9e6c2](https://github.com/disafronov/etl-prometheus2clickhouse/commit/9f9e6c2a0cee2abadc3ed4147a0d46087066c812))
+* normalize password handling in Prometheus configuration ([9b25946](https://github.com/disafronov/etl-prometheus2clickhouse/commit/9b259462dca4fd0ae0cc9519c854ba40c5549e6d))
+
+### Bug Fixes
+
+* ClickHouseClient URL handling ([a4e520c](https://github.com/disafronov/etl-prometheus2clickhouse/commit/a4e520c9aba713600f632373fb7c30f27711000f))
+* correct variable reference in ETL progress logging within Docker Compose ([4e5af16](https://github.com/disafronov/etl-prometheus2clickhouse/commit/4e5af1697b33cdb18c99866d1c57583f2d549256))
+* ensure timestamp metrics are integers in PushGatewayClient ([271572c](https://github.com/disafronov/etl-prometheus2clickhouse/commit/271572c7b7af4defa153dde3567a9de815d4cc10))
+* improve progress calculation and logging in ETL job ([7234914](https://github.com/disafronov/etl-prometheus2clickhouse/commit/72349144eb2c63b787a53b1414b492999fff8a19))
+* prevent future timestamp errors in ETL job progress calculation ([79bc151](https://github.com/disafronov/etl-prometheus2clickhouse/commit/79bc151bd461ad4f203da45a1940eee531d481d2))
+* update logging level for job status checks in ETL job ([62d2590](https://github.com/disafronov/etl-prometheus2clickhouse/commit/62d2590e6be280ef93bcef6211d119469eb7dbba))
+
 ## [1.0.0-rc.10](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0-rc.9...v1.0.0-rc.10) (2025-12-25)
 
 ### Features
