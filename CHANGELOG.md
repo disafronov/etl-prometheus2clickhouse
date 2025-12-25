@@ -1,3 +1,9 @@
+## [2.0.0-rc.4](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v2.0.0-rc.3...v2.0.0-rc.4) (2025-12-25)
+
+### Features
+
+* Enhance logging with formatted UTC timestamps ([9eaaf13](https://github.com/disafronov/etl-prometheus2clickhouse/commit/9eaaf134250ba44c7133b59a612fd2214eaa22c4))
+
 ## [2.0.0-rc.3](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v2.0.0-rc.2...v2.0.0-rc.3) (2025-12-25)
 
 ### Bug Fixes
