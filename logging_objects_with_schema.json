@@ -127,6 +127,24 @@
             "type": "str",
             "source": "etl_job.push_metrics_failed.message"
           }
+        },
+        "invalid_value_pair": {
+          "metric_name": {
+            "type": "str",
+            "source": "etl_job.invalid_value_pair.metric_name"
+          },
+          "value_pair": {
+            "type": "str",
+            "source": "etl_job.invalid_value_pair.value_pair"
+          },
+          "error": {
+            "type": "str",
+            "source": "etl_job.invalid_value_pair.error"
+          },
+          "error_type": {
+            "type": "str",
+            "source": "etl_job.invalid_value_pair.error_type"
+          }
         }
       }
     }

@@ -338,7 +338,16 @@ class EtlJob:
                     # (whole seconds) in JSON
                     ts = int(value_pair[0])
                     value = float(value_pair[1])
-                except (TypeError, ValueError, IndexError):
+                except (TypeError, ValueError, IndexError) as exc:
+                    logger.warning(
+                        "Skipping invalid value pair in Prometheus response",
+                        extra={
+                            "etl_job.invalid_value_pair.metric_name": metric_name,
+                            "etl_job.invalid_value_pair.value_pair": str(value_pair),
+                            "etl_job.invalid_value_pair.error": str(exc),
+                            "etl_job.invalid_value_pair.error_type": type(exc).__name__,
+                        },
+                    )
                     continue
 
                 row = {
