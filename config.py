@@ -227,6 +227,11 @@ class EtlConfig(BaseSettings):
         validation_alias="LOG_LEVEL",
         description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
     )
+    temp_dir: str = Field(
+        default="/tmp",  # nosec B108
+        validation_alias="TEMP_DIR",
+        description="Temporary directory for intermediate data files",
+    )
 
 
 class Config(BaseModel):

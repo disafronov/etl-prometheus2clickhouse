@@ -443,3 +443,130 @@ def test_clickhouse_client_insert_rows_insert_error_logs_details(
         assert "Exception: Table not found" in output
     finally:
         logger.removeHandler(handler)
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_insert_from_file_success(
+    mock_get_client: Mock, tmp_path
+) -> None:
+    """insert_from_file() should insert data from JSONL file successfully."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    # Create temporary JSONL file
+    file_path = tmp_path / "test.jsonl"
+    json_line1 = (
+        '{"timestamp":1700000000,"metric_name":"up",'
+        '"labels":"{\\"instance\\":\\"localhost\\"}","value":1.0}\n'
+    )
+    json_line2 = (
+        '{"timestamp":1700000300,"metric_name":"up",'
+        '"labels":"{\\"instance\\":\\"localhost\\"}","value":1.0}\n'
+    )
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(json_line1)
+        f.write(json_line2)
+
+    client.insert_from_file(str(file_path))
+
+    # Verify insert_file was called with correct parameters
+    mock_client.insert_file.assert_called_once()
+    call_args = mock_client.insert_file.call_args
+    assert call_args[0][0] == "db.tbl"
+    assert call_args[1]["column_names"] == [
+        "timestamp",
+        "metric_name",
+        "labels",
+        "value",
+    ]
+    assert call_args[1]["format_"] == "JSONEachRow"
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_insert_from_file_not_found(mock_get_client: Mock) -> None:
+    """insert_from_file() should raise FileNotFoundError when file doesn't exist."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    with pytest.raises(FileNotFoundError, match="File not found"):
+        client.insert_from_file("/nonexistent/file.jsonl")
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_insert_from_file_empty_file(
+    mock_get_client: Mock, tmp_path
+) -> None:
+    """insert_from_file() should handle empty file gracefully."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    # Create empty file
+    file_path = tmp_path / "empty.jsonl"
+    file_path.touch()
+
+    # Should not raise exception, but may or may not call insert_file
+    # depending on implementation
+    client.insert_from_file(str(file_path))
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_insert_from_file_fallback_when_insert_file_unavailable(
+    mock_get_client: Mock, tmp_path
+) -> None:
+    """insert_from_file() should fall back to insert_rows when unavailable."""
+    mock_client = Mock()
+    # Simulate insert_file not being available (AttributeError)
+    del mock_client.insert_file
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    # Create temporary JSONL file
+    file_path = tmp_path / "test.jsonl"
+    json_line = (
+        '{"timestamp":1700000000,"metric_name":"up",'
+        '"labels":"{\\"instance\\":\\"localhost\\"}","value":1.0}\n'
+    )
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(json_line)
+
+    # Should fall back to insert_rows
+    client.insert_from_file(str(file_path))
+
+    # Verify insert_rows was called instead
+    mock_client.insert.assert_called_once()
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_insert_from_file_insert_error(
+    mock_get_client: Mock, tmp_path
+) -> None:
+    """insert_from_file() should raise exception when insert fails."""
+    mock_client = Mock()
+    mock_client.insert_file.side_effect = Exception("Insert failed")
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    # Create temporary JSONL file
+    file_path = tmp_path / "test.jsonl"
+    json_line = (
+        '{"timestamp":1700000000,"metric_name":"up",'
+        '"labels":"{\\"instance\\":\\"localhost\\"}","value":1.0}\n'
+    )
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(json_line)
+
+    with pytest.raises(Exception, match="Insert failed"):
+        client.insert_from_file(str(file_path))
