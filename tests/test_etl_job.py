@@ -11,7 +11,6 @@ from config import (
     Config,
     EtlConfig,
     PrometheusConfig,
-    PushGatewayConfig,
 )
 from etl_job import EtlJob
 
@@ -64,10 +63,27 @@ class DummyClickHouseClient:
         self.inserts: list[list[dict[str, Any]]] = []
         self.insert_from_file_calls: list[str] = []
         self._should_fail = False
+        self._state: dict[str, int | None] = {
+            "timestamp_progress": None,
+            "timestamp_start": None,
+            "timestamp_end": None,
+            "batch_window_seconds": None,
+            "batch_rows": None,
+        }
+        self._should_fail_get_state = False
+        self._should_fail_save_state = False
 
     def set_should_fail(self, should_fail: bool) -> None:
         """Configure whether insert should fail."""
         self._should_fail = should_fail
+
+    def set_should_fail_get_state(self, should_fail: bool) -> None:
+        """Configure whether get_state should fail."""
+        self._should_fail_get_state = should_fail
+
+    def set_should_fail_save_state(self, should_fail: bool) -> None:
+        """Configure whether save_state should fail."""
+        self._should_fail_save_state = should_fail
 
     def insert_rows(self, rows: list[dict[str, Any]]) -> None:
         """Mock insert_rows method."""
@@ -98,48 +114,33 @@ class DummyClickHouseClient:
         if rows:
             self.inserts.append(rows)
 
+    def get_state(self) -> dict[str, int | None]:
+        """Mock get_state method."""
+        if self._should_fail_get_state:
+            raise Exception("ClickHouse get_state failed")
+        return self._state.copy()
 
-class DummyPushGatewayClient:
-    """Test double for PushGatewayClient."""
-
-    def __init__(self) -> None:
-        self.starts: list[float] = []
-        self.success_calls: list[dict[str, Any]] = []
-        self._should_fail_start = False
-        self._should_fail_success = False
-
-    def set_should_fail_start(self, should_fail: bool) -> None:
-        """Configure whether push_start should fail."""
-        self._should_fail_start = should_fail
-
-    def set_should_fail_success(self, should_fail: bool) -> None:
-        """Configure whether push_success should fail."""
-        self._should_fail_success = should_fail
-
-    def push_start(self, timestamp_start: float) -> None:
-        """Mock push_start method."""
-        if self._should_fail_start:
-            raise Exception("PushGateway push_start failed")
-        self.starts.append(timestamp_start)
-
-    def push_success(
+    def save_state(
         self,
-        timestamp_end: float,
-        timestamp_progress: float,
-        window_seconds: int,
-        rows_count: int,
+        timestamp_progress: int | None = None,
+        timestamp_start: int | None = None,
+        timestamp_end: int | None = None,
+        batch_window_seconds: int | None = None,
+        batch_rows: int | None = None,
     ) -> None:
-        """Mock push_success method."""
-        if self._should_fail_success:
-            raise Exception("PushGateway push_success failed")
-        self.success_calls.append(
-            {
-                "timestamp_end": timestamp_end,
-                "timestamp_progress": timestamp_progress,
-                "window_seconds": window_seconds,
-                "rows_count": rows_count,
-            }
-        )
+        """Mock save_state method."""
+        if self._should_fail_save_state:
+            raise Exception("ClickHouse save_state failed")
+        if timestamp_progress is not None:
+            self._state["timestamp_progress"] = timestamp_progress
+        if timestamp_start is not None:
+            self._state["timestamp_start"] = timestamp_start
+        if timestamp_end is not None:
+            self._state["timestamp_end"] = timestamp_end
+        if batch_window_seconds is not None:
+            self._state["batch_window_seconds"] = batch_window_seconds
+        if batch_rows is not None:
+            self._state["batch_rows"] = batch_rows
 
 
 def _make_config(**kwargs: object) -> Config:
@@ -160,12 +161,6 @@ def _make_config(**kwargs: object) -> Config:
             table="db.tbl",
             **{k: v for k, v in kwargs.items() if k.startswith("clickhouse_")},
         ),
-        pushgateway=PushGatewayConfig(
-            url="http://pg:9091",
-            job="job",
-            instance="inst",
-            **{k: v for k, v in kwargs.items() if k.startswith("pushgateway_")},
-        ),
         etl=EtlConfig(
             batch_window_size_seconds=300,  # overlap defaults to 0
             **etl_kwargs,
@@ -178,30 +173,11 @@ def test_etl_job_run_once_success() -> None:
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
-    # Mock Prometheus responses
-    prom.set_query_response(
-        "etl_timestamp_start",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
-        },
-    )
-    prom.set_query_response(
-        "etl_timestamp_end",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000100"]}]},
-        },
-    )
-    prom.set_query_response(
-        "etl_timestamp_progress",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
-        },
-    )
+    # Set initial state in ClickHouse
+    ch._state["timestamp_progress"] = 1700000000
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
 
     # Mock query_range response with sample data
     prom.set_query_range_response(
@@ -222,17 +198,16 @@ def test_etl_job_run_once_success() -> None:
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     job.run_once()
 
     # Verify calls
-    assert len(pg.starts) == 1
+    assert ch._state["timestamp_start"] is not None
     assert len(ch.inserts) == 1
     assert len(ch.inserts[0]) == 2  # Two data points
-    assert len(pg.success_calls) == 1
-    assert pg.success_calls[0]["rows_count"] == 2
+    assert ch._state["timestamp_progress"] is not None
+    assert ch._state["batch_rows"] == 2.0
 
 
 def test_etl_job_run_once_cannot_start_when_end_less_than_start() -> None:
@@ -240,37 +215,23 @@ def test_etl_job_run_once_cannot_start_when_end_less_than_start() -> None:
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
     # Set end < start (previous job still running)
-    prom.set_query_response(
-        "etl_timestamp_start",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000100"]}]},
-        },
-    )
-    prom.set_query_response(
-        "etl_timestamp_end",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
-        },
-    )
+    ch._state["timestamp_start"] = 1700000100
+    ch._state["timestamp_end"] = 1700000000
 
     job = EtlJob(
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     job.run_once()
 
-    # Should not proceed
-    assert len(pg.starts) == 0
+    # Should not proceed - state should remain unchanged
+    assert ch._state["timestamp_start"] == 1700000100  # Unchanged
     assert len(ch.inserts) == 0
-    assert len(pg.success_calls) == 0
+    assert ch._state["timestamp_progress"] is None  # Not set yet
 
 
 def test_etl_job_run_once_can_start_when_end_exists_but_start_missing() -> None:
@@ -278,27 +239,11 @@ def test_etl_job_run_once_can_start_when_end_exists_but_start_missing() -> None:
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
     # End exists but start doesn't - inconsistent state, but previous job finished
-    prom.set_query_response(
-        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_end",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
-        },
-    )
-    # Progress metric is required
-    prom.set_query_response(
-        "etl_timestamp_progress",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
-        },
-    )
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = 1700000000
+    ch._state["timestamp_progress"] = 1700000000
 
     prom.set_query_range_response(
         {
@@ -318,13 +263,12 @@ def test_etl_job_run_once_can_start_when_end_exists_but_start_missing() -> None:
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     job.run_once()
 
     # Should proceed despite inconsistent state (previous job finished)
-    assert len(pg.starts) == 1
+    assert ch._state["timestamp_start"] is not None
     assert len(ch.inserts) == 1
 
 
@@ -333,33 +277,23 @@ def test_etl_job_run_once_cannot_start_when_start_exists_but_end_missing() -> No
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
     # Start exists but end doesn't - previous job is still running
-    prom.set_query_response(
-        "etl_timestamp_start",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
-        },
-    )
-    prom.set_query_response(
-        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
-    )
+    ch._state["timestamp_start"] = 1700000000
+    ch._state["timestamp_end"] = None
 
     job = EtlJob(
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     job.run_once()
 
-    # Should not proceed
-    assert len(pg.starts) == 0
+    # Should not proceed - state should remain unchanged
+    assert ch._state["timestamp_start"] == 1700000000  # Unchanged
     assert len(ch.inserts) == 0
-    assert len(pg.success_calls) == 0
+    assert ch._state["timestamp_progress"] is None  # Not set yet
 
 
 def test_etl_job_run_once_can_start_when_no_previous_run() -> None:
@@ -367,23 +301,11 @@ def test_etl_job_run_once_can_start_when_no_previous_run() -> None:
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
-    # No previous run (empty results)
-    prom.set_query_response(
-        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
-    )
-    # Progress metric is required
-    prom.set_query_response(
-        "etl_timestamp_progress",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
-        },
-    )
+    # No previous run (empty state, but progress is required)
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
 
     prom.set_query_range_response(
         {
@@ -403,13 +325,12 @@ def test_etl_job_run_once_can_start_when_no_previous_run() -> None:
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     job.run_once()
 
     # Should proceed
-    assert len(pg.starts) == 1
+    assert ch._state["timestamp_start"] is not None
     assert len(ch.inserts) == 1
 
 
@@ -418,29 +339,26 @@ def test_etl_job_run_once_fails_on_mark_start_error() -> None:
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
-    pg.set_should_fail_start(True)
+    ch.set_should_fail_save_state(True)
 
-    prom.set_query_response(
-        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
-    )
+    # Set initial state
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
 
     job = EtlJob(
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     job.run_once()
 
     # Should not proceed after failed start
     assert len(ch.inserts) == 0
-    assert len(pg.success_calls) == 0
+    # Progress should remain unchanged (initial value)
+    assert ch._state["timestamp_progress"] == 1700000000
 
 
 def test_etl_job_run_once_fails_on_fetch_error() -> None:
@@ -448,22 +366,11 @@ def test_etl_job_run_once_fails_on_fetch_error() -> None:
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
-    prom.set_query_response(
-        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
-    )
-    # Progress metric is required
-    prom.set_query_response(
-        "etl_timestamp_progress",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
-        },
-    )
+    # Set initial state
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
 
     # Make query_range raise exception
     def failing_query_range(*_: object, **__: object) -> dict[str, Any]:
@@ -475,7 +382,6 @@ def test_etl_job_run_once_fails_on_fetch_error() -> None:
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     with pytest.raises(Exception, match="Prometheus query_range failed"):
@@ -483,7 +389,8 @@ def test_etl_job_run_once_fails_on_fetch_error() -> None:
 
     # Should not write or push success
     assert len(ch.inserts) == 0
-    assert len(pg.success_calls) == 0
+    # Progress should remain unchanged (initial value)
+    assert ch._state["timestamp_progress"] == 1700000000
 
 
 def test_etl_job_run_once_fails_on_write_error() -> None:
@@ -491,22 +398,11 @@ def test_etl_job_run_once_fails_on_write_error() -> None:
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
-    prom.set_query_response(
-        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
-    )
-    # Progress metric is required
-    prom.set_query_response(
-        "etl_timestamp_progress",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
-        },
-    )
+    # Set initial state
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
     prom.set_query_range_response(
         {
             "status": "success",
@@ -527,39 +423,31 @@ def test_etl_job_run_once_fails_on_write_error() -> None:
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     with pytest.raises(Exception, match="ClickHouse insert failed"):
         job.run_once()
 
     # Should not push success metrics
-    assert len(pg.success_calls) == 0
+    # Progress should remain unchanged (initial value)
+    assert ch._state["timestamp_progress"] == 1700000000
 
 
 def test_etl_job_run_once_fails_when_progress_missing() -> None:
-    """EtlJob should fail when TimestampProgress is not found in Prometheus."""
+    """EtlJob should fail when TimestampProgress is not found in ClickHouse."""
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
-    prom.set_query_response(
-        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
-    )
-    # No progress metric - should cause failure
-    prom.set_query_response(
-        "etl_timestamp_progress", {"status": "success", "data": {"result": []}}
-    )
+    # No progress in state - should cause failure
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = None  # Missing - should cause failure
 
     job = EtlJob(
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     with pytest.raises(ValueError, match="TimestampProgress.*not found"):
@@ -567,9 +455,11 @@ def test_etl_job_run_once_fails_when_progress_missing() -> None:
 
     # Should not proceed beyond progress loading
     # Note: _mark_start is called before _load_progress, so timestamp_start is pushed
-    assert len(pg.starts) == 1  # Start was marked before progress check
+    assert (
+        ch._state["timestamp_start"] is not None
+    )  # Start was marked before progress check
     assert len(ch.inserts) == 0  # But no data was processed
-    assert len(pg.success_calls) == 0  # And no success metrics
+    assert ch._state["timestamp_progress"] is None  # And no success metrics
 
 
 def test_etl_job_run_once_fails_on_push_success_error() -> None:
@@ -577,22 +467,11 @@ def test_etl_job_run_once_fails_on_push_success_error() -> None:
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
-    prom.set_query_response(
-        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
-    )
-    # Progress metric is required
-    prom.set_query_response(
-        "etl_timestamp_progress",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
-        },
-    )
+    # Set initial state
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
     prom.set_query_range_response(
         {
             "status": "success",
@@ -607,24 +486,38 @@ def test_etl_job_run_once_fails_on_push_success_error() -> None:
         }
     )
 
-    # Make push_success fail
-    pg.set_should_fail_success(True)
+    # Make save_state fail only on second call (after write)
+    # First call (start) should succeed, second call (success) should fail
+    original_save_state = ch.save_state
+
+    call_count = 0
+
+    def failing_save_state_after_start(*args: object, **kwargs: object) -> None:
+        nonlocal call_count
+        call_count += 1
+        # First call is for start - allow it
+        if call_count == 1:
+            original_save_state(*args, **kwargs)
+        else:
+            # Second call is for success - fail it
+            raise Exception("ClickHouse save_state failed")
+
+    ch.save_state = failing_save_state_after_start  # type: ignore[assignment]
 
     job = EtlJob(
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
-    with pytest.raises(Exception, match="PushGateway push_success failed"):
+    with pytest.raises(Exception, match="ClickHouse save_state failed"):
         job.run_once()
 
-    # Data should be written to ClickHouse before push_success fails
+    # Data should be written to ClickHouse before save_state fails
     assert len(ch.inserts) == 1
     assert len(ch.inserts[0]) == 1
-    # But push_success should not succeed
-    assert len(pg.success_calls) == 0
+    # But save_state should not succeed - progress should remain unchanged
+    assert ch._state["timestamp_progress"] == 1700000000
 
 
 def test_etl_job_fetch_data_parses_prometheus_response() -> None:
@@ -632,22 +525,11 @@ def test_etl_job_fetch_data_parses_prometheus_response() -> None:
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
-    prom.set_query_response(
-        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
-    )
-    # Progress metric is required
-    prom.set_query_response(
-        "etl_timestamp_progress",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
-        },
-    )
+    # Set initial state
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
 
     # Complex response with multiple series and labels
     prom.set_query_range_response(
@@ -683,7 +565,6 @@ def test_etl_job_fetch_data_parses_prometheus_response() -> None:
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     job.run_once()
@@ -711,118 +592,86 @@ def test_etl_job_fetch_data_parses_prometheus_response() -> None:
 
 
 def test_etl_job_check_can_start_handles_query_exception() -> None:
-    """EtlJob._check_can_start should handle exceptions from Prometheus query."""
+    """EtlJob._check_can_start should handle exceptions from ClickHouse get_state."""
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
-    # Make query raise exception
-    def failing_query(*_: object, **__: object) -> dict[str, Any]:
-        raise Exception("Prometheus query failed")
-
-    prom.query = failing_query  # type: ignore[assignment]
+    # Make get_state raise exception
+    ch.set_should_fail_get_state(True)
 
     job = EtlJob(
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     # Should return False and not raise exception
+    # When get_state fails, _read_state_field raises exception,
+    # which is caught in _check_can_start and returns False
     result = job._check_can_start()
     assert result is False
-    assert len(pg.starts) == 0
 
 
 def test_etl_job_load_progress_handles_query_exception() -> None:
-    """EtlJob._load_progress should raise exception when query fails."""
+    """EtlJob._load_progress should raise exception when get_state fails."""
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
-    prom.set_query_response(
-        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
-    )
-
-    # Make query raise exception for progress metric
-    def failing_query(expr: str) -> dict[str, Any]:
-        if expr == "etl_timestamp_progress":
-            raise Exception("Prometheus query failed")
-        return {"status": "success", "data": {"result": []}}
-
-    prom.query = failing_query  # type: ignore[assignment]
+    # Make get_state raise exception
+    ch.set_should_fail_get_state(True)
 
     job = EtlJob(
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     # Mark start first (required for load_progress to be called)
-    job._mark_start(1700000000.0)
+    job._mark_start(1700000000)
 
     # Should raise exception
-    with pytest.raises(Exception, match="Prometheus query failed"):
+    with pytest.raises(Exception, match="ClickHouse get_state failed"):
         job._load_progress()
 
 
-def test_etl_job_read_gauge_handles_non_success_status() -> None:
-    """EtlJob._read_gauge should return None when Prometheus returns non-success."""
+def test_etl_job_read_state_field_handles_missing_field() -> None:
+    """EtlJob._read_state_field should return None when field is missing."""
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
-    # Set response with error status
-    prom.set_query_response(
-        "etl_timestamp_start", {"status": "error", "data": {"result": []}}
-    )
+    # State is empty (all fields are None)
+    ch._state["timestamp_start"] = None
 
     job = EtlJob(
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
-    result = job._read_gauge("etl_timestamp_start")
+    result = job._read_state_field("timestamp_start")
     assert result is None
 
 
-def test_etl_job_read_gauge_handles_invalid_value_format() -> None:
-    """EtlJob._read_gauge should return None when value format is invalid."""
+def test_etl_job_read_state_field_returns_value_when_set() -> None:
+    """EtlJob._read_state_field should return value when field is set."""
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
-    # Set response with invalid value format (missing value field)
-    prom.set_query_response(
-        "etl_timestamp_start",
-        {
-            "status": "success",
-            "data": {
-                "result": [{"value": []}]
-            },  # Invalid: value should have 2 elements
-        },
-    )
+    # Set state value
+    ch._state["timestamp_start"] = 1700000000
 
     job = EtlJob(
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
-    result = job._read_gauge("etl_timestamp_start")
-    assert result is None
+    result = job._read_state_field("timestamp_start")
+    assert result == 1700000000
 
 
 def test_etl_job_fetch_data_handles_invalid_value_pairs() -> None:
@@ -830,21 +679,10 @@ def test_etl_job_fetch_data_handles_invalid_value_pairs() -> None:
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
-    prom.set_query_response(
-        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_progress",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
-        },
-    )
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
 
     # Response with invalid value pairs (should be skipped)
     prom.set_query_range_response(
@@ -870,7 +708,6 @@ def test_etl_job_fetch_data_handles_invalid_value_pairs() -> None:
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     job.run_once()
@@ -885,21 +722,10 @@ def test_etl_job_run_once_handles_empty_result_from_prometheus() -> None:
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
-    prom.set_query_response(
-        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_progress",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
-        },
-    )
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
 
     # Empty result from Prometheus
     prom.set_query_range_response({"status": "success", "data": {"result": []}})
@@ -908,18 +734,17 @@ def test_etl_job_run_once_handles_empty_result_from_prometheus() -> None:
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     job.run_once()
 
     # Should complete successfully even with empty result
-    assert len(pg.starts) == 1
+    assert ch._state["timestamp_start"] is not None
     assert len(ch.inserts) == 0  # No rows to write
-    assert len(pg.success_calls) == 1
+    assert ch._state["timestamp_progress"] is not None
     # Progress should still advance
-    assert pg.success_calls[0]["timestamp_progress"] == 1700000300.0
-    assert pg.success_calls[0]["rows_count"] == 0
+    assert ch._state["timestamp_progress"] == 1700000300
+    assert ch._state["batch_rows"] == 0.0
 
 
 def test_etl_job_run_once_prevents_progress_from_going_into_future() -> None:
@@ -929,25 +754,14 @@ def test_etl_job_run_once_prevents_progress_from_going_into_future() -> None:
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
     # Set progress to a time very close to current time
     current_time = time.time()
     progress_in_future = current_time + 1000  # 1000 seconds in future
 
-    prom.set_query_response(
-        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_progress",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, str(progress_in_future)]}]},
-        },
-    )
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = progress_in_future
 
     # Empty result - no data in Prometheus for future window
     prom.set_query_range_response({"status": "success", "data": {"result": []}})
@@ -956,14 +770,13 @@ def test_etl_job_run_once_prevents_progress_from_going_into_future() -> None:
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     job.run_once()
 
     # Progress should be capped at current time, not go further into future
-    assert len(pg.success_calls) == 1
-    new_progress = pg.success_calls[0]["timestamp_progress"]
+    assert ch._state["timestamp_progress"] is not None
+    new_progress = ch._state["timestamp_progress"]
     # Should not exceed current time (allow small margin for execution time)
     assert new_progress <= time.time() + 1
     # Should not be progress_in_future + batch_window_size_seconds
@@ -980,29 +793,26 @@ def test_etl_job_calc_window_with_overlap() -> None:
     config = Config(
         prometheus=PrometheusConfig(url="http://prom:9090"),
         clickhouse=ClickHouseConfig(url="http://ch:8123", table="db.tbl"),
-        pushgateway=PushGatewayConfig(url="http://pg:9091", job="job", instance="inst"),
         etl=etl_config,
     )
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
     job = EtlJob(
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
-    progress = 1000.0
+    progress = 1000
     window_start, window_end = job._calc_window(progress)
 
     # Window should start at progress - overlap
-    assert window_start == 980.0  # 1000 - 20
+    assert window_start == 980  # 1000 - 20
     # Window should end at progress + window_size
-    assert window_end == 1300.0  # 1000 + 300
+    assert window_end == 1300  # 1000 + 300
     # Window size should be window_size + overlap
-    assert window_end - window_start == 320.0  # 300 + 20
+    assert window_end - window_start == 320  # 300 + 20
 
 
 def test_etl_job_calc_window_without_overlap() -> None:
@@ -1010,29 +820,26 @@ def test_etl_job_calc_window_without_overlap() -> None:
     config = Config(
         prometheus=PrometheusConfig(url="http://prom:9090"),
         clickhouse=ClickHouseConfig(url="http://ch:8123", table="db.tbl"),
-        pushgateway=PushGatewayConfig(url="http://pg:9091", job="job", instance="inst"),
         etl=EtlConfig(batch_window_size_seconds=300),  # overlap defaults to 0
     )
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
     job = EtlJob(
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
-    progress = 1000.0
+    progress = 1000
     window_start, window_end = job._calc_window(progress)
 
     # Window should start at progress (no overlap)
-    assert window_start == 1000.0
+    assert window_start == 1000
     # Window should end at progress + window_size
-    assert window_end == 1300.0  # 1000 + 300
+    assert window_end == 1300  # 1000 + 300
     # Window size should be exactly window_size
-    assert window_end - window_start == 300.0
+    assert window_end - window_start == 300
 
 
 def test_etl_job_fetch_data_handles_file_write_error() -> None:
@@ -1042,21 +849,10 @@ def test_etl_job_fetch_data_handles_file_write_error() -> None:
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
-    prom.set_query_response(
-        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_progress",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
-        },
-    )
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
 
     # Mock query_range response with data
     prom.set_query_range_response(
@@ -1077,13 +873,12 @@ def test_etl_job_fetch_data_handles_file_write_error() -> None:
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     # Mock os.fdopen to raise exception during file write
     with patch("etl_job.os.fdopen", side_effect=OSError("Disk full")):
         with pytest.raises(OSError, match="Disk full"):
-            job._fetch_data(1700000000.0, 1700000300.0)
+            job._fetch_data(1700000000, 1700000300)
 
 
 def test_etl_job_fetch_data_handles_file_cleanup_error_on_write_error() -> None:
@@ -1093,21 +888,10 @@ def test_etl_job_fetch_data_handles_file_cleanup_error_on_write_error() -> None:
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
-    prom.set_query_response(
-        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_progress",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
-        },
-    )
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
 
     # Mock query_range response with data
     prom.set_query_range_response(
@@ -1128,7 +912,6 @@ def test_etl_job_fetch_data_handles_file_cleanup_error_on_write_error() -> None:
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     # Mock file object that raises error on write
@@ -1154,7 +937,7 @@ def test_etl_job_fetch_data_handles_file_cleanup_error_on_write_error() -> None:
         # Should raise original write error, not cleanup error
         # Cleanup error should be silently ignored (lines 441-443)
         with pytest.raises(OSError, match="Disk full"):
-            job._fetch_data(1700000000.0, 1700000300.0)
+            job._fetch_data(1700000000, 1700000300)
 
 
 def test_etl_job_run_once_handles_file_cleanup_error() -> None:
@@ -1164,21 +947,10 @@ def test_etl_job_run_once_handles_file_cleanup_error() -> None:
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
-    pg = DummyPushGatewayClient()
 
-    prom.set_query_response(
-        "etl_timestamp_start", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_end", {"status": "success", "data": {"result": []}}
-    )
-    prom.set_query_response(
-        "etl_timestamp_progress",
-        {
-            "status": "success",
-            "data": {"result": [{"value": [1234567890, "1700000000"]}]},
-        },
-    )
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
 
     prom.set_query_range_response(
         {
@@ -1198,7 +970,6 @@ def test_etl_job_run_once_handles_file_cleanup_error() -> None:
         config=config,
         prometheus_client=prom,
         clickhouse_client=ch,
-        pushgateway_client=pg,
     )
 
     # Mock os.unlink to raise exception during cleanup
@@ -1209,4 +980,4 @@ def test_etl_job_run_once_handles_file_cleanup_error() -> None:
 
     # Should have written data and pushed success metrics
     assert len(ch.inserts) == 1
-    assert len(pg.success_calls) == 1
+    assert ch._state["timestamp_progress"] is not None

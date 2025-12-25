@@ -12,15 +12,11 @@ def test_load_config_from_env(monkeypatch) -> None:
     monkeypatch.setenv("PROMETHEUS_URL", "http://prom:9090")
     monkeypatch.setenv("CLICKHOUSE_URL", "http://ch:8123")
     monkeypatch.setenv("CLICKHOUSE_TABLE", "db.tbl")
-    monkeypatch.setenv("PUSHGATEWAY_URL", "http://pg:9091")
-    monkeypatch.setenv("PUSHGATEWAY_JOB", "job")
-    monkeypatch.setenv("PUSHGATEWAY_INSTANCE", "inst")
 
     config = load_config()
 
     assert config.prometheus.url == "http://prom:9090"
     assert config.clickhouse.table == "db.tbl"
-    assert config.pushgateway.job == "job"
     assert config.etl.batch_window_size_seconds > 0
 
 
@@ -31,9 +27,6 @@ def test_load_config_clickhouse_timeouts_from_env(monkeypatch) -> None:
     monkeypatch.setenv("CLICKHOUSE_TABLE", "db.tbl")
     monkeypatch.setenv("CLICKHOUSE_CONNECT_TIMEOUT", "30")
     monkeypatch.setenv("CLICKHOUSE_SEND_RECEIVE_TIMEOUT", "600")
-    monkeypatch.setenv("PUSHGATEWAY_URL", "http://pg:9091")
-    monkeypatch.setenv("PUSHGATEWAY_JOB", "job")
-    monkeypatch.setenv("PUSHGATEWAY_INSTANCE", "inst")
 
     config = load_config()
 
@@ -47,9 +40,6 @@ def test_load_config_validation_error_missing_required_field(monkeypatch) -> Non
     monkeypatch.delenv("PROMETHEUS_URL", raising=False)
     monkeypatch.setenv("CLICKHOUSE_URL", "http://ch:8123")
     monkeypatch.setenv("CLICKHOUSE_TABLE", "db.tbl")
-    monkeypatch.setenv("PUSHGATEWAY_URL", "http://pg:9091")
-    monkeypatch.setenv("PUSHGATEWAY_JOB", "job")
-    monkeypatch.setenv("PUSHGATEWAY_INSTANCE", "inst")
 
     with pytest.raises(ValueError, match="Configuration validation failed"):
         load_config()
@@ -119,47 +109,6 @@ def test_prometheus_config_keeps_none_password_when_no_user(monkeypatch) -> None
     cfg = PrometheusConfig(
         _env_file=[],  # Disable .env file reading
         url="http://prom:9090",
-        user=None,
-        password=None,
-    )
-
-    # Password should remain None when no user is specified
-    assert cfg.password is None
-
-
-def test_pushgateway_config_normalizes_password_when_user_specified(
-    monkeypatch,
-) -> None:
-    """PushGatewayConfig should normalize None password to "" when user is set.
-
-    This handles the case when PUSHGATEWAY_PASSWORD is set to empty string
-    in environment variables and env_ignore_empty=True converts it to None.
-    """
-    from config import PushGatewayConfig
-
-    # Simulate env_ignore_empty=True behavior: empty string becomes None
-    cfg = PushGatewayConfig(
-        _env_file=[],  # Disable .env file reading
-        url="http://pg:9091",
-        job="test_job",
-        instance="test_instance",
-        user="testuser",
-        password=None,  # This should be normalized to ""
-    )
-
-    # Password should be normalized to empty string by validator
-    assert cfg.password == ""
-
-
-def test_pushgateway_config_keeps_none_password_when_no_user(monkeypatch) -> None:
-    """PushGatewayConfig should keep None password when no user is specified."""
-    from config import PushGatewayConfig
-
-    cfg = PushGatewayConfig(
-        _env_file=[],  # Disable .env file reading
-        url="http://pg:9091",
-        job="test_job",
-        instance="test_instance",
         user=None,
         password=None,
     )
