@@ -35,24 +35,6 @@ services:
         curl -s http://clickhouse:8123/ --data-binary @/init.sql
         echo "Table creation completed."
 
-  pushgateway_init:
-    image: curlimages/curl:latest
-    container_name: pushgateway_init
-    depends_on:
-      pushgateway:
-        condition: service_healthy
-    command:
-      - sh
-      - -c
-      - |
-        echo "Initializing ETL progress in PushGateway..."
-        TIMESTAMP_PROGRESS=$(date +%s)
-        curl -s -X POST http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse \
-          -d "# TYPE etl_timestamp_progress gauge
-        etl_timestamp_progress $$TIMESTAMP_PROGRESS
-        "
-        echo "ETL progress initialized with timestamp: $$TIMESTAMP_PROGRESS"
-
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
@@ -74,19 +56,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-    depends_on:
-      - pushgateway
 
-  pushgateway:
-    image: prom/pushgateway:latest
-    container_name: pushgateway
-    ports:
-      - "9091:9091"
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9091/-/healthy"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
 
   node_exporter:
     image: prom/node-exporter:latest
@@ -185,6 +155,16 @@ configs:
           value Float64
       ) ENGINE = ReplacingMergeTree()
       ORDER BY (timestamp, metric_name, labels);
+
+      CREATE TABLE IF NOT EXISTS default.etl (
+          timestamp_progress Nullable(Int64),
+          timestamp_start Nullable(Int64),
+          timestamp_end Nullable(Int64),
+          batch_window_seconds Nullable(Int64),
+          batch_rows Nullable(Int64),
+          updated_at DateTime DEFAULT now()
+      ) ENGINE = ReplacingMergeTree()
+      ORDER BY updated_at;
 
 volumes:
   clickhouse_data:

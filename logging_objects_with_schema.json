@@ -189,18 +189,6 @@
           }
         }
       },
-      "pushgateway_client": {
-        "push_failed": {
-          "error": {
-            "type": "str",
-            "source": "pushgateway_client.push_failed.error"
-          },
-          "url": {
-            "type": "str",
-            "source": "pushgateway_client.push_failed.url"
-          }
-        }
-      },
       "etl_job": {
         "check_start_failed": {
           "message": {
@@ -238,10 +226,10 @@
             "source": "etl_job.write_failed.message"
           }
         },
-        "push_metrics_failed": {
+        "save_metrics_failed": {
           "message": {
             "type": "str",
-            "source": "etl_job.push_metrics_failed.message"
+            "source": "etl_job.save_metrics_failed.message"
           }
         },
         "invalid_value_pair": {
