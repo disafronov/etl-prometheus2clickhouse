@@ -78,14 +78,12 @@ class EtlJob:
             return
 
         logger.info(f"Job start marked at {int(timestamp_start)}")
+        logger.info(f"Processing window size: {self._config.etl.batch_window_seconds}s")
 
         progress = self._load_progress()
         window_start, window_end = self._calc_window(progress)
 
-        logger.info(
-            f"Processing window: {int(window_start)} - {int(window_end)} "
-            f"(progress: {int(progress)})"
-        )
+        logger.info(f"Processing window: {int(window_start)} - {int(window_end)}")
 
         rows = self._fetch_data(window_start, window_end)
         self._write_rows(rows)
@@ -114,13 +112,6 @@ class EtlJob:
             timestamp_progress=new_progress,
             window_seconds=int(actual_window),
             rows_count=len(rows),
-        )
-
-        logger.info(
-            f"ETL cycle completed: progress {int(progress)} -> {int(new_progress)} "
-            f"(actual={int(actual_window)}s, "
-            f"expected={self._config.etl.batch_window_seconds}s), "
-            f"processed {len(rows)} rows"
         )
 
     def _read_gauge(self, metric_name: str) -> float | None:
