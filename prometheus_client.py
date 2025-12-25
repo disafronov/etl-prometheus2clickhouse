@@ -36,7 +36,9 @@ class PrometheusClient:
         self._timeout = config.timeout
 
         self._auth = None
-        if config.user and config.password:
+        # Use is not None to allow empty string passwords
+        # Empty string "" is different from None for HTTP Basic Auth
+        if config.user is not None and config.password is not None:
             self._auth = (config.user, config.password)
 
         self._verify = not config.insecure

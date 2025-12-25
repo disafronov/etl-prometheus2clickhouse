@@ -11,13 +11,30 @@ from config import PushGatewayConfig
 from pushgateway_client import PushGatewayClient
 
 
+def _make_pushgateway_config(**kwargs: object) -> PushGatewayConfig:
+    """Create PushGatewayConfig for tests, disabling .env file reading.
+
+    Args:
+        **kwargs: Additional config parameters to override defaults
+
+    Returns:
+        PushGatewayConfig instance with test defaults
+    """
+    defaults = {
+        "_env_file": [],  # Disable .env file reading in tests
+        "user": None,
+        "password": None,
+        "url": "http://pg:9091",
+        "job": "test_job",
+        "instance": "test_instance",
+    }
+    defaults.update(kwargs)
+    return PushGatewayConfig(**defaults)
+
+
 def test_pushgateway_client_init() -> None:
     """Client should be constructed with minimal config."""
-    config = PushGatewayConfig(
-        url="http://pg:9091",
-        job="test_job",
-        instance="test_instance",
-    )
+    config = _make_pushgateway_config()
     client = PushGatewayClient(config)
     assert client._base_url == "http://pg:9091"
     assert client._job == "test_job"
@@ -30,12 +47,7 @@ def test_pushgateway_client_init() -> None:
 
 def test_pushgateway_client_init_with_token() -> None:
     """Client should use Bearer token when token is provided."""
-    config = PushGatewayConfig(
-        url="http://pg:9091",
-        job="test_job",
-        instance="test_instance",
-        token="test_token",
-    )
+    config = _make_pushgateway_config(token="test_token")
     client = PushGatewayClient(config)
     assert client._headers["Authorization"] == "Bearer test_token"
     assert client._auth is None
@@ -44,27 +56,25 @@ def test_pushgateway_client_init_with_token() -> None:
 
 def test_pushgateway_client_init_with_basic_auth() -> None:
     """Client should use basic auth when user and password are provided."""
-    config = PushGatewayConfig(
-        url="http://pg:9091",
-        job="test_job",
-        instance="test_instance",
-        user="testuser",
-        password="testpass",
-    )
+    config = _make_pushgateway_config(user="testuser", password="testpass")
     client = PushGatewayClient(config)
     assert client._auth == ("testuser", "testpass")
     assert "Authorization" not in client._headers
     assert client._verify is True
 
 
+def test_pushgateway_client_init_with_empty_password() -> None:
+    """Client should use basic auth with empty string password when explicitly set."""
+    config = _make_pushgateway_config(user="testuser", password="")
+    client = PushGatewayClient(config)
+    assert client._auth == ("testuser", "")
+    assert "Authorization" not in client._headers
+    assert client._verify is True
+
+
 def test_pushgateway_client_init_with_insecure() -> None:
     """Client should disable TLS verification when insecure=True."""
-    config = PushGatewayConfig(
-        url="http://pg:9091",
-        job="test_job",
-        instance="test_instance",
-        insecure=True,
-    )
+    config = _make_pushgateway_config(insecure=True)
     client = PushGatewayClient(config)
     assert client._verify is False
 
@@ -72,11 +82,7 @@ def test_pushgateway_client_init_with_insecure() -> None:
 @patch("pushgateway_client.requests.post")
 def test_pushgateway_client_push_start_success(mock_post: Mock) -> None:
     """push_start() should push TimestampStart metric successfully."""
-    config = PushGatewayConfig(
-        url="http://pg:9091",
-        job="test_job",
-        instance="test_instance",
-    )
+    config = _make_pushgateway_config()
     client = PushGatewayClient(config)
 
     mock_response = Mock(spec=requests.Response)
@@ -99,11 +105,7 @@ def test_pushgateway_client_push_start_success(mock_post: Mock) -> None:
 @patch("pushgateway_client.requests.post")
 def test_pushgateway_client_push_success_metrics(mock_post: Mock) -> None:
     """push_success() should push all required metrics."""
-    config = PushGatewayConfig(
-        url="http://pg:9091",
-        job="test_job",
-        instance="test_instance",
-    )
+    config = _make_pushgateway_config()
     client = PushGatewayClient(config)
 
     mock_response = Mock(spec=requests.Response)
@@ -133,11 +135,7 @@ def test_pushgateway_client_push_success_metrics(mock_post: Mock) -> None:
 @patch("pushgateway_client.requests.post")
 def test_pushgateway_client_push_start_http_error(mock_post: Mock) -> None:
     """push_start() should raise exception on HTTP error."""
-    config = PushGatewayConfig(
-        url="http://pg:9091",
-        job="test_job",
-        instance="test_instance",
-    )
+    config = _make_pushgateway_config()
     client = PushGatewayClient(config)
 
     mock_response = Mock(spec=requests.Response)
@@ -152,11 +150,7 @@ def test_pushgateway_client_push_start_http_error(mock_post: Mock) -> None:
 @patch("pushgateway_client.requests.post")
 def test_pushgateway_client_push_success_http_error(mock_post: Mock) -> None:
     """push_success() should raise exception on HTTP error."""
-    config = PushGatewayConfig(
-        url="http://pg:9091",
-        job="test_job",
-        instance="test_instance",
-    )
+    config = _make_pushgateway_config()
     client = PushGatewayClient(config)
 
     mock_response = Mock(spec=requests.Response)
@@ -176,12 +170,7 @@ def test_pushgateway_client_push_success_http_error(mock_post: Mock) -> None:
 @patch("pushgateway_client.requests.post")
 def test_pushgateway_client_push_with_insecure(mock_post: Mock) -> None:
     """push_start() should use verify=False when insecure=True."""
-    config = PushGatewayConfig(
-        url="http://pg:9091",
-        job="test_job",
-        instance="test_instance",
-        insecure=True,
-    )
+    config = _make_pushgateway_config(insecure=True)
     client = PushGatewayClient(config)
 
     mock_response = Mock(spec=requests.Response)

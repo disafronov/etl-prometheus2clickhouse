@@ -11,9 +11,28 @@ from config import PrometheusConfig
 from prometheus_client import PrometheusClient
 
 
+def _make_prometheus_config(**kwargs: object) -> PrometheusConfig:
+    """Create PrometheusConfig for tests, disabling .env file reading.
+
+    Args:
+        **kwargs: Additional config parameters to override defaults
+
+    Returns:
+        PrometheusConfig instance with test defaults
+    """
+    defaults = {
+        "_env_file": [],  # Disable .env file reading in tests
+        "user": None,
+        "password": None,
+        "url": "http://prom:9090",
+    }
+    defaults.update(kwargs)
+    return PrometheusConfig(**defaults)
+
+
 def test_prometheus_client_init() -> None:
     """Client should be constructed with minimal config."""
-    config = PrometheusConfig(url="http://prom:9090")
+    config = _make_prometheus_config()
     client = PrometheusClient(config)
     assert client._base_url == "http://prom:9090"
     assert client._timeout == 10
@@ -22,21 +41,21 @@ def test_prometheus_client_init() -> None:
 
 def test_prometheus_client_init_with_auth() -> None:
     """Client should use basic auth when user and password are provided."""
-    config = PrometheusConfig(
-        url="http://prom:9090",
-        user="testuser",
-        password="testpass",
-    )
+    config = _make_prometheus_config(user="testuser", password="testpass")
     client = PrometheusClient(config)
     assert client._auth == ("testuser", "testpass")
 
 
+def test_prometheus_client_init_with_empty_password() -> None:
+    """Client should use basic auth with empty string password when explicitly set."""
+    config = _make_prometheus_config(user="testuser", password="")
+    client = PrometheusClient(config)
+    assert client._auth == ("testuser", "")
+
+
 def test_prometheus_client_init_with_insecure() -> None:
     """Client should disable TLS verification when insecure=True."""
-    config = PrometheusConfig(
-        url="http://prom:9090",
-        insecure=True,
-    )
+    config = _make_prometheus_config(insecure=True)
     client = PrometheusClient(config)
     assert client._verify is False
 
@@ -44,7 +63,7 @@ def test_prometheus_client_init_with_insecure() -> None:
 @patch("prometheus_client.requests.get")
 def test_prometheus_client_query_success(mock_get: Mock) -> None:
     """query() should return parsed JSON response."""
-    config = PrometheusConfig(url="http://prom:9090")
+    config = _make_prometheus_config()
     client = PrometheusClient(config)
 
     mock_response = Mock(spec=requests.Response)
@@ -70,7 +89,7 @@ def test_prometheus_client_query_success(mock_get: Mock) -> None:
 @patch("prometheus_client.requests.get")
 def test_prometheus_client_query_range_success(mock_get: Mock) -> None:
     """query_range() should return parsed JSON response."""
-    config = PrometheusConfig(url="http://prom:9090")
+    config = _make_prometheus_config()
     client = PrometheusClient(config)
 
     mock_response = Mock(spec=requests.Response)
@@ -105,7 +124,7 @@ def test_prometheus_client_query_range_success(mock_get: Mock) -> None:
 @patch("prometheus_client.requests.get")
 def test_prometheus_client_query_http_error(mock_get: Mock) -> None:
     """query() should raise exception on HTTP error."""
-    config = PrometheusConfig(url="http://prom:9090")
+    config = _make_prometheus_config()
     client = PrometheusClient(config)
 
     mock_response = Mock(spec=requests.Response)
@@ -121,7 +140,7 @@ def test_prometheus_client_query_http_error(mock_get: Mock) -> None:
 @patch("prometheus_client.requests.get")
 def test_prometheus_client_query_invalid_json(mock_get: Mock) -> None:
     """query() should raise exception on invalid JSON."""
-    config = PrometheusConfig(url="http://prom:9090")
+    config = _make_prometheus_config()
     client = PrometheusClient(config)
 
     mock_response = Mock(spec=requests.Response)
@@ -138,7 +157,7 @@ def test_prometheus_client_query_invalid_json(mock_get: Mock) -> None:
 @patch("prometheus_client.requests.get")
 def test_prometheus_client_query_non_dict_response(mock_get: Mock) -> None:
     """query() should raise exception when response is not a dict."""
-    config = PrometheusConfig(url="http://prom:9090")
+    config = _make_prometheus_config()
     client = PrometheusClient(config)
 
     mock_response = Mock(spec=requests.Response)

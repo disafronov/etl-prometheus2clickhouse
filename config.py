@@ -27,7 +27,8 @@ class PrometheusConfig(BaseSettings):
         env_prefix="PROMETHEUS_",
         case_sensitive=False,
         extra="ignore",
-        env_ignore_empty=True,
+        # Removed env_ignore_empty=True to allow empty string passwords
+        # Empty string "" is different from None for HTTP Basic Auth
     )
 
     url: str = Field(..., description="Base URL of Prometheus/Mimir")
@@ -67,7 +68,8 @@ class ClickHouseConfig(BaseSettings):
         env_prefix="CLICKHOUSE_",
         case_sensitive=False,
         extra="ignore",
-        env_ignore_empty=True,
+        # Removed env_ignore_empty=True to allow empty string passwords
+        # Empty string "" is different from None for ClickHouse authentication
     )
 
     url: str = Field(..., description="Base URL of ClickHouse HTTP interface")
@@ -105,7 +107,8 @@ class PushGatewayConfig(BaseSettings):
         env_prefix="PUSHGATEWAY_",
         case_sensitive=False,
         extra="ignore",
-        env_ignore_empty=True,
+        # Removed env_ignore_empty=True to allow empty string passwords
+        # Empty string "" is different from None for HTTP Basic Auth
     )
 
     url: str = Field(..., description="Base URL of PushGateway")
