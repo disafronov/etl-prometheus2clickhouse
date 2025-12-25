@@ -6,6 +6,7 @@ ClickHouse client wrapper for batch inserts.
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlparse
 
 import clickhouse_connect
 
@@ -39,14 +40,31 @@ class ClickHouseClient:
         self._table = config.table
 
         try:
+            # Parse URL to extract host, port, and scheme
+            # clickhouse-connect 0.10.0+ requires host and port instead of url
+            parsed_url = urlparse(config.url)
+            host = parsed_url.hostname
+            if host is None:
+                raise ValueError(f"Invalid URL: missing hostname in {config.url}")
+
+            port = parsed_url.port
+            if port is None:
+                # Default ports based on scheme
+                port = 8443 if parsed_url.scheme == "https" else 8123
+
+            # Determine if connection should be secure (HTTPS)
+            secure = parsed_url.scheme == "https"
+
             # Type ignore: clickhouse_connect.get_client accepts None for password
             # but mypy types are too strict
             # verify parameter controls TLS certificate verification
             # When insecure=True, verify=False disables certificate validation
             self._client = clickhouse_connect.get_client(
-                url=config.url,
+                host=host,
+                port=port,
                 username=config.user,
                 password=config.password,  # type: ignore[arg-type]
+                secure=secure,
                 connect_timeout=config.connect_timeout,
                 send_receive_timeout=config.send_receive_timeout,
                 verify=not config.insecure,

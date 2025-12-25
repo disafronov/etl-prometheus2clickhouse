@@ -26,9 +26,11 @@ def test_clickhouse_client_init(mock_get_client: Mock) -> None:
     assert client._table == "db.tbl"
     assert client._client == mock_client
     mock_get_client.assert_called_once_with(
-        url="http://ch:8123",
+        host="ch",
+        port=8123,
         username=None,
         password=None,
+        secure=False,
         connect_timeout=10,
         send_receive_timeout=300,
         verify=True,
@@ -49,9 +51,11 @@ def test_clickhouse_client_init_with_auth(mock_get_client: Mock) -> None:
     )
     ClickHouseClient(cfg)
     mock_get_client.assert_called_once_with(
-        url="http://ch:8123",
+        host="ch",
+        port=8123,
         username="testuser",
         password="testpass",
+        secure=False,
         connect_timeout=10,
         send_receive_timeout=300,
         verify=True,
@@ -72,9 +76,11 @@ def test_clickhouse_client_init_with_custom_timeouts(mock_get_client: Mock) -> N
     )
     ClickHouseClient(cfg)
     mock_get_client.assert_called_once_with(
-        url="http://ch:8123",
+        host="ch",
+        port=8123,
         username=None,
         password=None,
+        secure=False,
         connect_timeout=30,
         send_receive_timeout=600,
         verify=True,
@@ -94,9 +100,11 @@ def test_clickhouse_client_init_with_insecure(mock_get_client: Mock) -> None:
     )
     ClickHouseClient(cfg)
     mock_get_client.assert_called_once_with(
-        url="http://ch:8123",
+        host="ch",
+        port=8123,
         username=None,
         password=None,
+        secure=False,
         connect_timeout=10,
         send_receive_timeout=300,
         verify=False,
