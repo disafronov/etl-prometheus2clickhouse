@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Prometheus client for executing query and query_range requests.
+Prometheus client for executing query_range requests.
 """
 
 from __future__ import annotations
@@ -18,9 +18,8 @@ logger = getLogger(__name__)
 class PrometheusClient:
     """Client for interacting with Prometheus-compatible HTTP API.
 
-    Supports both Prometheus and Mimir (Prometheus-compatible). Used for:
-    - Reading job state metrics (etl_timestamp_*)
-    - Fetching metric data via query_range for processing
+    Supports both Prometheus and Mimir (Prometheus-compatible). Used for
+    fetching metric data via query_range for processing.
     """
 
     def __init__(self, config: PrometheusConfig) -> None:
@@ -56,13 +55,13 @@ class PrometheusClient:
         """Execute HTTP GET request to Prometheus API with error handling.
 
         Handles common exceptions (Timeout, ConnectionError, RequestException)
-        with structured logging. Used by both query() and query_range() methods.
+        with structured logging. Used by query_range() method.
 
         Args:
             url: Full URL to Prometheus API endpoint
             params: Query parameters for the request
             expr: PromQL expression (for error context)
-            query_type: Type of query ("query" or "query_range") for log prefixes
+            query_type: Type of query ("query_range") for log prefixes
             extra_log_fields: Optional additional fields for logging
                 (e.g., step, window_seconds)
 
@@ -194,32 +193,6 @@ class PrometheusClient:
             raise ValueError("Prometheus returned invalid response format")
 
         return data
-
-    def query(self, expr: str) -> dict[str, Any]:
-        """Execute instant query.
-
-        Performs Prometheus instant query (single point in time). Used for
-        reading job state metrics like etl_timestamp_start, etl_timestamp_end,
-        and etl_timestamp_progress.
-
-        Args:
-            expr: PromQL expression to execute
-
-        Returns:
-            Prometheus API response dictionary
-
-        Raises:
-            requests.RequestException: If HTTP request fails
-            ValueError: If response is invalid
-        """
-        url = f"{self._base_url}/api/v1/query"
-        response = self._execute_request(
-            url=url,
-            params={"query": expr},
-            expr=expr,
-            query_type="query",
-        )
-        return self._handle_response(response, expr)
 
     def query_range(self, expr: str, start: int, end: int, step: str) -> dict[str, Any]:
         """Execute range query.
