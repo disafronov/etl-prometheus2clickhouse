@@ -295,6 +295,81 @@ def test_clickhouse_client_insert_from_file_invalid_table_name(
     mock_requests_post.assert_not_called()
 
 
+@patch("clickhouse_client.requests.post")
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_insert_from_file_empty_table_name(
+    mock_get_client: Mock, mock_requests_post: Mock, tmp_path
+) -> None:
+    """insert_from_file() should raise ValueError for empty table name."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(table_metrics="")
+    client = ClickHouseClient(cfg)
+
+    # Create test file
+    file_path = tmp_path / "test.jsonl"
+    file_path.write_text(
+        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+    )
+
+    with pytest.raises(ValueError, match="table name cannot be empty"):
+        client.insert_from_file(str(file_path))
+
+    # Verify that HTTP POST was not called due to validation error
+    mock_requests_post.assert_not_called()
+
+
+@patch("clickhouse_client.requests.post")
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_insert_from_file_too_many_dots(
+    mock_get_client: Mock, mock_requests_post: Mock, tmp_path
+) -> None:
+    """insert_from_file() should raise ValueError for table name with too many dots."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(table_metrics="db.table.extra")
+    client = ClickHouseClient(cfg)
+
+    # Create test file
+    file_path = tmp_path / "test.jsonl"
+    file_path.write_text(
+        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+    )
+
+    with pytest.raises(ValueError, match="too many dots"):
+        client.insert_from_file(str(file_path))
+
+    # Verify that HTTP POST was not called due to validation error
+    mock_requests_post.assert_not_called()
+
+
+@patch("clickhouse_client.requests.post")
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_insert_from_file_empty_part(
+    mock_get_client: Mock, mock_requests_post: Mock, tmp_path
+) -> None:
+    """insert_from_file() should raise ValueError for table name with empty part."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(table_metrics=".table")
+    client = ClickHouseClient(cfg)
+
+    # Create test file
+    file_path = tmp_path / "test.jsonl"
+    file_path.write_text(
+        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+    )
+
+    with pytest.raises(ValueError, match="empty part"):
+        client.insert_from_file(str(file_path))
+
+    # Verify that HTTP POST was not called due to validation error
+    mock_requests_post.assert_not_called()
+
+
 @patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_insert_from_file_not_found(
     mock_get_client: Mock, tmp_path
@@ -517,6 +592,54 @@ def test_clickhouse_client_get_state_invalid_table_name(mock_get_client: Mock) -
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_get_state_empty_table_name(mock_get_client: Mock) -> None:
+    """get_state() should raise ValueError for empty table name."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(table_etl="")
+    client = ClickHouseClient(cfg)
+
+    with pytest.raises(ValueError, match="table name cannot be empty"):
+        client.get_state()
+
+    # Verify that query was not called due to validation error
+    mock_client.query.assert_not_called()
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_get_state_too_many_dots(mock_get_client: Mock) -> None:
+    """get_state() should raise ValueError for table name with too many dots."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(table_etl="db.table.extra")
+    client = ClickHouseClient(cfg)
+
+    with pytest.raises(ValueError, match="too many dots"):
+        client.get_state()
+
+    # Verify that query was not called due to validation error
+    mock_client.query.assert_not_called()
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_get_state_empty_part(mock_get_client: Mock) -> None:
+    """get_state() should raise ValueError for table name with empty part."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(table_etl=".table")
+    client = ClickHouseClient(cfg)
+
+    with pytest.raises(ValueError, match="empty part"):
+        client.get_state()
+
+    # Verify that query was not called due to validation error
+    mock_client.query.assert_not_called()
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_save_state_success(mock_get_client: Mock) -> None:
     """save_state() should insert state using INSERT."""
     mock_client = Mock()
@@ -721,6 +844,51 @@ def test_clickhouse_client_save_state_update_invalid_table_name(
             timestamp_start=1700000100,
             timestamp_progress=1700000000,
         )
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_save_state_empty_table_name(
+    mock_get_client: Mock,
+) -> None:
+    """save_state() should raise ValueError for empty table name."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(table_etl="")
+    client = ClickHouseClient(cfg)
+
+    with pytest.raises(ValueError, match="table name cannot be empty"):
+        client.save_state(timestamp_start=1700000100)
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_save_state_too_many_dots(
+    mock_get_client: Mock,
+) -> None:
+    """save_state() should raise ValueError for table name with too many dots."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(table_etl="db.table.extra")
+    client = ClickHouseClient(cfg)
+
+    with pytest.raises(ValueError, match="too many dots"):
+        client.save_state(timestamp_start=1700000100)
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_save_state_empty_part(
+    mock_get_client: Mock,
+) -> None:
+    """save_state() should raise ValueError for table name with empty part."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(table_etl=".table")
+    client = ClickHouseClient(cfg)
+
+    with pytest.raises(ValueError, match="empty part"):
+        client.save_state(timestamp_start=1700000100)
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")

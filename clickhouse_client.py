@@ -231,16 +231,35 @@ class ClickHouseClient:
         ClickHouse doesn't support parameterized table names in queries,
         so we validate the table name format. Only alphanumeric characters,
         underscores, and dots are allowed (standard ClickHouse identifier format).
+        Format must be either 'table' or 'database.table', both parts must be
+        non-empty and valid identifiers.
 
         Args:
             table_name: Table name to validate
             field_name: Name of field for error message
 
         Raises:
-            ValueError: If table name contains invalid characters
+            ValueError: If table name contains invalid characters or format
         """
-        if not all(c.isalnum() or c in ("_", ".") for c in table_name):
-            raise ValueError(f"Invalid {field_name} format: {table_name}")
+        if not table_name or not table_name.strip():
+            raise ValueError(f"Invalid {field_name}: table name cannot be empty")
+
+        parts = table_name.split(".")
+        if len(parts) > 2:
+            raise ValueError(
+                f"Invalid {field_name} format: {table_name} (too many dots)"
+            )
+
+        for part in parts:
+            if not part or not part.strip():
+                raise ValueError(
+                    f"Invalid {field_name} format: {table_name} (empty part)"
+                )
+            if not all(c.isalnum() or c == "_" for c in part):
+                raise ValueError(
+                    f"Invalid {field_name} format: {table_name} "
+                    f"(invalid characters in part: {part})"
+                )
 
     def save_state(
         self,
