@@ -178,7 +178,7 @@ def _make_config(**kwargs: object) -> Config:
         ),
         clickhouse=ClickHouseConfig(
             url="http://ch:8123",
-            table="db.tbl",
+            table_metrics="db.tbl",
             **{k: v for k, v in kwargs.items() if k.startswith("clickhouse_")},
         ),
         etl=EtlConfig(
@@ -862,7 +862,7 @@ def test_etl_job_calc_window_with_overlap() -> None:
     )
     config = Config(
         prometheus=PrometheusConfig(url="http://prom:9090"),
-        clickhouse=ClickHouseConfig(url="http://ch:8123", table="db.tbl"),
+        clickhouse=ClickHouseConfig(url="http://ch:8123", table_metrics="db.tbl"),
         etl=etl_config,
     )
     prom = DummyPromClient()
@@ -889,7 +889,7 @@ def test_etl_job_calc_window_without_overlap() -> None:
     """EtlJob._calc_window should work correctly without overlap."""
     config = Config(
         prometheus=PrometheusConfig(url="http://prom:9090"),
-        clickhouse=ClickHouseConfig(url="http://ch:8123", table="db.tbl"),
+        clickhouse=ClickHouseConfig(url="http://ch:8123", table_metrics="db.tbl"),
         etl=EtlConfig(batch_window_size_seconds=300),  # overlap defaults to 0
     )
     prom = DummyPromClient()

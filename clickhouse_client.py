@@ -37,7 +37,7 @@ class ClickHouseClient:
             Exception: If connection initialization fails
         """
         self._config = config
-        self._table = config.table
+        self._table_metrics = config.table_metrics
         self._table_state = config.table_state
 
         try:
@@ -112,7 +112,7 @@ class ClickHouseClient:
                 error_msg,
                 extra={
                     "clickhouse_client.insert_failed.error": f"Missing key: {exc}",
-                    "clickhouse_client.insert_failed.table": self._table,
+                    "clickhouse_client.insert_failed.table": self._table_metrics,
                     "clickhouse_client.insert_failed.rows_count": len(rows),
                 },
             )
@@ -120,7 +120,7 @@ class ClickHouseClient:
 
         try:
             self._client.insert(
-                self._table,
+                self._table_metrics,
                 data,
                 column_names=list(columns),
             )
@@ -130,7 +130,7 @@ class ClickHouseClient:
                 f"Failed to insert rows into ClickHouse: {error_details}",
                 extra={
                     "clickhouse_client.insert_failed.error": str(exc),
-                    "clickhouse_client.insert_failed.table": self._table,
+                    "clickhouse_client.insert_failed.table": self._table_metrics,
                     "clickhouse_client.insert_failed.rows_count": len(rows),
                 },
             )
@@ -161,7 +161,9 @@ class ClickHouseClient:
                 extra={
                     "clickhouse_client.insert_from_file_failed.error": error_msg,
                     "clickhouse_client.insert_from_file_failed.file_path": file_path,
-                    "clickhouse_client.insert_from_file_failed.table": self._table,
+                    "clickhouse_client.insert_from_file_failed.table": (
+                        self._table_metrics
+                    ),
                 },
             )
             raise FileNotFoundError(error_msg)
@@ -174,7 +176,7 @@ class ClickHouseClient:
             # we catch AttributeError if it's missing
             with open(file_path, "rb") as f:
                 self._client.insert_file(  # type: ignore[attr-defined]
-                    self._table,
+                    self._table_metrics,
                     f,
                     column_names=["timestamp", "metric_name", "labels", "value"],
                     format_="JSONEachRow",
@@ -213,7 +215,9 @@ class ClickHouseClient:
                 extra={
                     "clickhouse_client.insert_from_file_failed.error": str(exc),
                     "clickhouse_client.insert_from_file_failed.file_path": file_path,
-                    "clickhouse_client.insert_from_file_failed.table": self._table,
+                    "clickhouse_client.insert_from_file_failed.table": (
+                        self._table_metrics
+                    ),
                 },
             )
             raise
