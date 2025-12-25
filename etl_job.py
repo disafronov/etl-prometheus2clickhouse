@@ -98,7 +98,17 @@ class EtlJob:
 
         file_path, rows_count = self._fetch_data(window_start, window_end)
         try:
-            self._write_rows(file_path)
+            self._ch.insert_from_file(file_path)
+            logger.info(f"Successfully wrote data to ClickHouse from file {file_path}")
+        except Exception as exc:
+            logger.error(
+                "Failed to write rows to ClickHouse",
+                extra={
+                    "etl_job.write_failed.message": str(exc),
+                    "etl_job.write_failed.file_path": file_path,
+                },
+            )
+            raise
         finally:
             # Always clean up temporary file, even if write fails
             self._cleanup_temp_file(file_path)
@@ -450,32 +460,6 @@ class EtlJob:
         )
 
         return file_path, rows_count
-
-    def _write_rows(self, file_path: str) -> None:
-        """Write rows from file to ClickHouse.
-
-        Loads data from JSONL file and inserts into ClickHouse. If this fails,
-        no progress is updated, allowing job to retry the same window on next run.
-        Empty files are handled gracefully by insert_from_file() (no-op).
-
-        Args:
-            file_path: Path to JSONL file with data in JSONEachRow format
-
-        Raises:
-            Exception: If ClickHouse insert fails
-        """
-        try:
-            self._ch.insert_from_file(file_path)
-            logger.info(f"Successfully wrote data to ClickHouse from file {file_path}")
-        except Exception as exc:
-            logger.error(
-                "Failed to write rows to ClickHouse",
-                extra={
-                    "etl_job.write_failed.message": str(exc),
-                    "etl_job.write_failed.file_path": file_path,
-                },
-            )
-            raise
 
     def _create_temp_file(self) -> tuple[int, str]:
         """Create temporary file for ETL batch data.
