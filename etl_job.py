@@ -65,17 +65,25 @@ class EtlJob:
         5. Updates progress and end timestamp only after successful write
 
         Raises:
+            RuntimeError: If job cannot start (previous job running or error
+                checking state).
+            RuntimeError: If job start cannot be marked (error saving state).
             ValueError: If TimestampProgress is not found in ClickHouse.
             Exception: If any step fails (fetch, write, or save state).
         """
         if not self._check_can_start():
-            return
+            raise RuntimeError(
+                "Job cannot start: previous job is still running or "
+                "error checking state"
+            )
 
         logger.info("Job can start, beginning ETL cycle")
 
         timestamp_start = int(time.time())
         if not self._mark_start(timestamp_start):
-            return
+            raise RuntimeError(
+                "Job cannot start: failed to mark job start in ClickHouse"
+            )
 
         logger.info(f"Job start marked at {int(timestamp_start)}")
         logger.info(
