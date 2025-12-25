@@ -1,3 +1,9 @@
+## [1.1.0-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0...v1.1.0-rc.1) (2025-12-25)
+
+### Features
+
+* Enhance error handling and logging in PrometheusClient ([0563fb5](https://github.com/disafronov/etl-prometheus2clickhouse/commit/0563fb5791725716202b5cccb620571a99a76a6b))
+
 ## 1.0.0 (2025-12-25)
 
 ### Features
