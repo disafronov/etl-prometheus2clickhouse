@@ -78,6 +78,17 @@ Run checks:
 make all
 ```
 
+### Debugging
+
+For debugging purposes, you can run the ETL job periodically to monitor its
+behavior:
+
+```bash
+while true; do make docker-run; sleep 10; done
+```
+
+This will run the job every 10 seconds. Adjust the sleep interval as needed.
+
 ## ClickHouse Table Requirements
 
 The target ClickHouse table must be configured to handle potential duplicate
