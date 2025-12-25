@@ -164,6 +164,55 @@ def test_clickhouse_client_init_with_insecure(mock_get_client: Mock) -> None:
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_init_with_https_url(mock_get_client: Mock) -> None:
+    """Client should use HTTPS port 8443 and secure=True for https:// URLs."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(url="https://ch:8443")
+    ClickHouseClient(cfg)
+    mock_get_client.assert_called_once_with(
+        host="ch",
+        port=8443,
+        username=None,
+        password=None,
+        secure=True,
+        connect_timeout=10,
+        send_receive_timeout=300,
+        verify=True,
+    )
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_init_with_https_url_no_port(mock_get_client: Mock) -> None:
+    """Client should default to port 8443 for https:// URLs when port not specified."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config(url="https://ch")
+    ClickHouseClient(cfg)
+    mock_get_client.assert_called_once_with(
+        host="ch",
+        port=8443,
+        username=None,
+        password=None,
+        secure=True,
+        connect_timeout=10,
+        send_receive_timeout=300,
+        verify=True,
+    )
+
+
+def test_clickhouse_client_init_with_invalid_url_missing_hostname() -> None:
+    """Client should raise ValueError when URL has no hostname."""
+    # URL without hostname (e.g., "http://" or "http://:8123")
+    cfg = _make_clickhouse_config(url="http://:8123")
+
+    with pytest.raises(ValueError, match="Invalid URL: missing hostname"):
+        ClickHouseClient(cfg)
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_init_connection_error(mock_get_client: Mock) -> None:
     """Client should raise exception on connection failure."""
     mock_get_client.side_effect = Exception("Connection refused")
