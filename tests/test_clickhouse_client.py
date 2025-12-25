@@ -556,7 +556,8 @@ def test_clickhouse_client_insert_from_file_insert_error_logs_details(
     assert mock_logger.error.call_count >= 1
     error_messages = [call[0][0] for call in mock_logger.error.call_args_list]
     assert any(
-        "Failed to insert from file into ClickHouse" in msg for msg in error_messages
+        "Failed to insert from file using insert_file method" in msg
+        for msg in error_messages
     )
     assert any("Insert failed" in msg for msg in error_messages)
 

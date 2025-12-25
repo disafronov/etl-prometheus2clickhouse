@@ -5,6 +5,7 @@ ClickHouse client wrapper for batch inserts.
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Any
 from urllib.parse import urlparse
@@ -175,12 +176,12 @@ class ClickHouseClient:
         # so we validate the table name format before using it.
         self._validate_table_name(self._table_metrics, "table_metrics")
 
+        # Try to use insert_file method if available (preferred method for streaming)
+        # clickhouse-connect supports insert_file for streaming file uploads
+        # Format: JSONEachRow matches our JSONL format (one JSON object per line)
+        # Type ignore: insert_file may not be available in all versions,
+        # we catch AttributeError if it's missing
         try:
-            # Use insert_file method if available, otherwise fall back to raw_query
-            # clickhouse-connect supports insert_file for streaming file uploads
-            # Format: JSONEachRow matches our JSONL format (one JSON object per line)
-            # Type ignore: insert_file may not be available in all versions,
-            # we catch AttributeError if it's missing
             with open(file_path, "rb") as f:
                 self._client.insert_file(  # type: ignore[attr-defined]
                     self._table_metrics,
@@ -188,11 +189,12 @@ class ClickHouseClient:
                     column_names=["timestamp", "metric_name", "labels", "value"],
                     format_="JSONEachRow",
                 )
+            # Successfully used insert_file, return early
+            return
         except AttributeError:
-            # Fallback: if insert_file is not available, use raw_query with
-            # INSERT FROM FILE. This requires file to be accessible by ClickHouse
-            # server, which may not work in all deployment scenarios, so we
-            # prefer insert_file.
+            # insert_file method is not available in this version of clickhouse-connect
+            # Fall back to reading file and using insert_rows method
+            # This is less efficient but works when insert_file is unavailable
             logger.warning(
                 "insert_file method not available, using alternative method",
                 extra={
@@ -200,48 +202,12 @@ class ClickHouseClient:
                     "clickhouse_client.insert_from_file_failed.file_path": file_path,
                 },
             )
-            # Read file and insert via standard insert method as fallback
-            # This is less efficient but works when insert_file is unavailable
-            import json
-
-            file_size = os.path.getsize(file_path)
-            rows: list[dict[str, Any]] = []
-            with open(file_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    row = json.loads(line)
-                    rows.append(row)
-
-            # Warn about performance impact for large files when using fallback
-            # Fallback loads entire file into memory, which can be problematic
-            # for very large files
-            if file_size > 10 * 1024 * 1024:  # 10 MB threshold
-                logger.warning(
-                    (
-                        "Large file detected in fallback mode: file will be loaded "
-                        "entirely into memory. This may cause performance issues. "
-                        "Consider upgrading clickhouse-connect to use insert_file."
-                    ),
-                    extra={
-                        "clickhouse_client.insert_from_file_fallback_performance.file_path": (  # noqa: E501
-                            file_path
-                        ),
-                        "clickhouse_client.insert_from_file_fallback_performance.file_size_bytes": (  # noqa: E501
-                            file_size
-                        ),
-                        "clickhouse_client.insert_from_file_fallback_performance.rows_count": (  # noqa: E501
-                            len(rows)
-                        ),
-                    },
-                )
-
-            if rows:
-                self.insert_rows(rows)
         except Exception as exc:
+            # insert_file exists but failed with a real error (network, format, etc.)
+            # This is not a missing method issue, so we should not fall back
+            # Log and re-raise the original exception
             error_msg = (
-                f"Failed to insert from file into ClickHouse: "
+                f"Failed to insert from file using insert_file method: "
                 f"{type(exc).__name__}: {exc}"
             )
             logger.error(
@@ -255,6 +221,81 @@ class ClickHouseClient:
                 },
             )
             raise
+
+        # Fallback: read file and insert via standard insert method
+        # This is less efficient but works when insert_file is unavailable
+        # Get file size first for performance warning
+        file_size = os.path.getsize(file_path)
+        rows: list[dict[str, Any]] = []
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    row = json.loads(line)
+                    rows.append(row)
+        except Exception as exc:
+            error_msg = (
+                f"Failed to read file for fallback insert: "
+                f"{type(exc).__name__}: {exc}"
+            )
+            logger.error(
+                error_msg,
+                extra={
+                    "clickhouse_client.insert_from_file_failed.error": str(exc),
+                    "clickhouse_client.insert_from_file_failed.file_path": file_path,
+                    "clickhouse_client.insert_from_file_failed.table": (
+                        self._table_metrics
+                    ),
+                },
+            )
+            raise
+
+        # Warn about performance impact for large files when using fallback
+        # Fallback loads entire file into memory, which can be problematic
+        # for very large files
+        if file_size > 10 * 1024 * 1024:  # 10 MB threshold
+            logger.warning(
+                (
+                    "Large file detected in fallback mode: file will be loaded "
+                    "entirely into memory. This may cause performance issues. "
+                    "Consider upgrading clickhouse-connect to use insert_file."
+                ),
+                extra={
+                    "clickhouse_client.insert_from_file_fallback_performance.file_path": (  # noqa: E501
+                        file_path
+                    ),
+                    "clickhouse_client.insert_from_file_fallback_performance.file_size_bytes": (  # noqa: E501
+                        file_size
+                    ),
+                    "clickhouse_client.insert_from_file_fallback_performance.rows_count": (  # noqa: E501
+                        len(rows)
+                    ),
+                },
+            )
+
+        if rows:
+            try:
+                self.insert_rows(rows)
+            except Exception as exc:
+                error_msg = (
+                    f"Failed to insert from file into ClickHouse (fallback method): "
+                    f"{type(exc).__name__}: {exc}"
+                )
+                logger.error(
+                    error_msg,
+                    extra={
+                        "clickhouse_client.insert_from_file_failed.error": str(exc),
+                        "clickhouse_client.insert_from_file_failed.file_path": (
+                            file_path
+                        ),
+                        "clickhouse_client.insert_from_file_failed.table": (
+                            self._table_metrics
+                        ),
+                    },
+                )
+                raise
 
     def get_state(self) -> dict[str, int | None]:
         """Read latest ETL state from ClickHouse.
