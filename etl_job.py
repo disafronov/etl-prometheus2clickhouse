@@ -23,7 +23,7 @@ from typing import Any
 
 from clickhouse_client import ClickHouseClient
 from config import Config
-from logging_config import getLogger
+from logging_config import format_timestamp_with_utc, getLogger
 from prometheus_client import PrometheusClient
 
 logger = getLogger(__name__)
@@ -85,7 +85,7 @@ class EtlJob:
                 "Job cannot start: failed to mark job start in ClickHouse"
             )
 
-        logger.info(f"Job start marked at {int(timestamp_start)}")
+        logger.info(f"Job start marked at {format_timestamp_with_utc(timestamp_start)}")
         logger.info(
             f"Batch window size: {self._config.etl.batch_window_size_seconds}s, "
             f"batch window overlap: {self._config.etl.batch_window_overlap_seconds}s"
@@ -94,7 +94,10 @@ class EtlJob:
         progress = self._load_progress()
         window_start, window_end = self._calc_window(progress)
 
-        logger.info(f"Processing window: {window_start} - {window_end}")
+        logger.info(
+            f"Processing window: {format_timestamp_with_utc(window_start)} - "
+            f"{format_timestamp_with_utc(window_end)}"
+        )
 
         file_path, rows_count = self._fetch_data(window_start, window_end)
         try:
@@ -124,8 +127,10 @@ class EtlJob:
         if new_progress < expected_progress:
             window_reduced = int(expected_progress - new_progress)
             logger.warning(
-                f"Progress limited by current time: expected={int(expected_progress)}, "
-                f"actual={int(new_progress)}, window_reduced_by={window_reduced}s"
+                f"Progress limited by current time: "
+                f"expected={format_timestamp_with_utc(int(expected_progress))}, "
+                f"actual={format_timestamp_with_utc(int(new_progress))}, "
+                f"window_reduced_by={window_reduced}s"
             )
 
         # Ensure timestamp_end is always greater than timestamp_start.
@@ -289,7 +294,9 @@ class EtlJob:
         try:
             progress = self._read_state_field("timestamp_progress")
             if progress is not None:
-                logger.info(f"Loaded progress timestamp: {progress}")
+                logger.info(
+                    f"Loaded progress timestamp: {format_timestamp_with_utc(progress)}"
+                )
                 return progress
         except Exception as exc:
             logger.error(
@@ -554,7 +561,8 @@ class EtlJob:
                 batch_rows=rows_count,
             )
             logger.info(
-                f"State saved: progress={int(timestamp_progress)}, "
+                f"State saved: "
+                f"progress={format_timestamp_with_utc(timestamp_progress)}, "
                 f"rows={rows_count}, window={window_seconds}s"
             )
         except Exception as exc:

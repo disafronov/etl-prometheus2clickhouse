@@ -140,3 +140,20 @@ def set_all_loggers_level(level: str | int) -> None:
         existing_logger = logging.getLogger(logger_name)
         if existing_logger.level != resolved_level:
             existing_logger.setLevel(resolved_level)
+
+
+def format_timestamp_with_utc(timestamp: int) -> str:
+    """Format Unix timestamp with UTC expansion in parentheses.
+
+    Formats timestamp as: "timestamp (YYYY-MM-DDTHH:MM:SS+00:00)"
+    Useful for log messages where numeric timestamps need human-readable UTC expansion.
+
+    Args:
+        timestamp: Unix timestamp in seconds (int)
+
+    Returns:
+        Formatted string with timestamp and UTC expansion
+    """
+    dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+    utc_str = dt.isoformat(timespec="seconds")
+    return f"{timestamp} ({utc_str})"
