@@ -45,9 +45,10 @@ class ClickHouseClient:
         self._http_url = config.url
         self._http_auth = None
         if config.user:
-            # Empty string password is allowed (different from None)
-            password = config.password if config.password is not None else ""
-            self._http_auth = (config.user, password)
+            # Password is normalized by ClickHouseConfig validator:
+            # if user is specified but password is None, it's converted to "".
+            # Empty string "" is different from None for HTTP Basic Auth.
+            self._http_auth = (config.user, config.password or "")
         self._http_verify = not config.insecure
 
         try:
