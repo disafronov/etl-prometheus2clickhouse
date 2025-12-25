@@ -36,11 +36,7 @@ services:
       - sh
       - -c
       - |
-        echo "Waiting for ClickHouse to be ready..."
-        until curl -s http://clickhouse:8123/ping > /dev/null; do
-          sleep 1
-        done
-        echo "ClickHouse is ready. Creating table..."
+        echo "Creating table in ClickHouse..."
         curl -s http://clickhouse:8123/ --data-binary @/init.sql
         echo "Table creation completed."
 
@@ -56,11 +52,7 @@ services:
       - sh
       - -c
       - |
-        echo "Waiting for PushGateway to be ready..."
-        until curl -s http://pushgateway:9091/-/healthy > /dev/null; do
-          sleep 1
-        done
-        echo "PushGateway is ready. Initializing ETL progress..."
+        echo "Initializing ETL progress in PushGateway..."
         TIMESTAMP_PROGRESS=$(date +%s)
         curl -s -X POST http://pushgateway:9091/metrics/job/etl_prometheus2clickhouse/instance/etl_prometheus2clickhouse \
           -d "# TYPE etl_timestamp_progress gauge
@@ -151,8 +143,10 @@ services:
     networks:
       - etl_network
     depends_on:
-      - prometheus
-      - clickhouse
+      prometheus:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
 
 configs:
   prometheus_config:
