@@ -1,3 +1,10 @@
+## [1.1.0-rc.2](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.1.0-rc.1...v1.1.0-rc.2) (2025-12-25)
+
+### Features
+
+* Add insert_from_file method to ClickHouseClient for efficient data insertion ([be9e1b3](https://github.com/disafronov/etl-prometheus2clickhouse/commit/be9e1b3e2951e78095a073cbbc06858620112fc7))
+* Enhance ETL job and ClickHouseClient with improved file handling and logging ([a76ec36](https://github.com/disafronov/etl-prometheus2clickhouse/commit/a76ec369beb21b1ddfe638a870ab60ae56a9790f))
+
 ## [1.1.0-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0...v1.1.0-rc.1) (2025-12-25)
 
 ### Features
