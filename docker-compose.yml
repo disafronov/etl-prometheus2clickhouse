@@ -90,9 +90,10 @@ services:
     environment:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
     configs:
       - source: grafana_datasources
-        target: /etc/grafana/provisioning/datasources/prometheus.yml
+        target: /etc/grafana/provisioning/datasources/datasources.yml
     volumes:
       - grafana_data:/var/lib/grafana
     healthcheck:
@@ -104,6 +105,7 @@ services:
       - etl_network
     depends_on:
       - prometheus
+      - clickhouse
 
 configs:
   prometheus_config:
@@ -137,6 +139,17 @@ configs:
           access: proxy
           url: http://prometheus:9090
           isDefault: true
+          editable: false
+        - name: ClickHouse
+          type: grafana-clickhouse-datasource
+          access: proxy
+          jsonData:
+            defaultDatabase: default
+            port: 8123
+            host: clickhouse
+            username: default
+            protocol: http
+          secureJsonData: {}
           editable: false
 
 volumes:
