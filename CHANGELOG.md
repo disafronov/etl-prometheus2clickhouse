@@ -1,3 +1,15 @@
+## [1.0.0-rc.9](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0-rc.8...v1.0.0-rc.9) (2025-12-25)
+
+### Features
+
+* enhance logging for ETL job data fetching ([ddaeb15](https://github.com/disafronov/etl-prometheus2clickhouse/commit/ddaeb15cae34815ee6d109ef9f0c4498d746c1b5))
+* enhance logging throughout ETL job process ([a86be1f](https://github.com/disafronov/etl-prometheus2clickhouse/commit/a86be1f3085aaa4a84fde508f9967da297bf6d5f))
+
+### Bug Fixes
+
+* ensure timestamp metrics are integers in PushGatewayClient ([a84daf2](https://github.com/disafronov/etl-prometheus2clickhouse/commit/a84daf2c1f4e3468ed1572e5f7ce6156471f2741))
+* prevent future timestamp errors in ETL job progress calculation ([c9d3488](https://github.com/disafronov/etl-prometheus2clickhouse/commit/c9d34882ffd45cbef9bca694d73d2873b29c1efb))
+
 ## [1.0.0-rc.8](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0-rc.7...v1.0.0-rc.8) (2025-12-25)
 
 ### Features
