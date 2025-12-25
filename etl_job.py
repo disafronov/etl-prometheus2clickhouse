@@ -3,12 +3,13 @@
 Core ETL job implementation.
 
 Implements the ETL algorithm:
-- Check start condition via TimestampStart/TimestampEnd from Prometheus.
-- Mark start by pushing new TimestampStart to PushGateway.
-- Read TimestampProgress from Prometheus (required, job fails if not found).
+- Check start condition via TimestampStart/TimestampEnd from ClickHouse.
+- Mark start by saving new TimestampStart to ClickHouse.
+- Read TimestampProgress from ClickHouse (required, job fails if not found).
 - Calculate processing window based on progress and batch window size.
 - Fetch data from Prometheus and write to ClickHouse in a single batch.
-- Push updated progress and end timestamps, plus window size and rows count.
+- Save updated progress and end timestamps, plus window size and rows count
+  to ClickHouse.
 """
 
 from __future__ import annotations
@@ -24,7 +25,6 @@ from clickhouse_client import ClickHouseClient
 from config import Config
 from logging_config import getLogger
 from prometheus_client import PrometheusClient
-from pushgateway_client import PushGatewayClient
 
 logger = getLogger(__name__)
 
@@ -32,8 +32,8 @@ logger = getLogger(__name__)
 class EtlJob:
     """ETL job coordinator.
 
-    Coordinates the ETL process: reads job state from Prometheus, processes
-    data in batches, writes to ClickHouse, and updates state via PushGateway.
+    Coordinates the ETL process: reads job state from ClickHouse, processes
+    data in batches, writes to ClickHouse, and updates state in ClickHouse.
     Uses dependency injection for all external services to enable testing.
     """
 
@@ -42,41 +42,38 @@ class EtlJob:
         config: Config,
         prometheus_client: PrometheusClient,
         clickhouse_client: ClickHouseClient,
-        pushgateway_client: PushGatewayClient,
     ) -> None:
         """Initialize ETL job with all required dependencies.
 
         Args:
             config: Application configuration (timeouts, batch size, etc.)
-            prometheus_client: Client for reading job state and metrics
-            clickhouse_client: Client for writing processed data
-            pushgateway_client: Client for updating job state metrics
+            prometheus_client: Client for reading metrics data from Prometheus
+            clickhouse_client: Client for writing processed data and job state
         """
         self._config = config
         self._prom = prometheus_client
         self._ch = clickhouse_client
-        self._pg = pushgateway_client
 
     def run_once(self) -> None:
         """Run single ETL iteration according to the algorithm.
 
         Executes one complete ETL cycle:
         1. Checks if job can start (prevents concurrent runs)
-        2. Marks start in PushGateway (atomic operation to claim execution)
-        3. Loads progress from Prometheus (required, fails if missing)
+        2. Marks start in ClickHouse (atomic operation to claim execution)
+        3. Loads progress from ClickHouse (required, fails if missing)
         4. Fetches and writes data for current window
         5. Updates progress and end timestamp only after successful write
 
         Raises:
-            ValueError: If TimestampProgress is not found in Prometheus.
-            Exception: If any step fails (fetch, write, or push metrics).
+            ValueError: If TimestampProgress is not found in ClickHouse.
+            Exception: If any step fails (fetch, write, or save state).
         """
         if not self._check_can_start():
             return
 
         logger.info("Job can start, beginning ETL cycle")
 
-        timestamp_start = time.time()
+        timestamp_start = int(time.time())
         if not self._mark_start(timestamp_start):
             return
 
@@ -89,7 +86,7 @@ class EtlJob:
         progress = self._load_progress()
         window_start, window_end = self._calc_window(progress)
 
-        logger.info(f"Processing window: {int(window_start)} - {int(window_end)}")
+        logger.info(f"Processing window: {window_start} - {window_end}")
 
         file_path, rows_count = self._fetch_data(window_start, window_end)
         try:
@@ -104,7 +101,7 @@ class EtlJob:
 
         # Calculate new progress, but never exceed current time to avoid going
         # into the future where Prometheus has no data yet
-        current_time = time.time()
+        current_time = int(time.time())
         expected_progress = progress + self._config.etl.batch_window_size_seconds
         new_progress = min(expected_progress, current_time)
         actual_window = new_progress - progress
@@ -119,7 +116,7 @@ class EtlJob:
 
         # Ensure timestamp_end is always greater than timestamp_start.
         # TimestampEnd must never equal TimestampStart.
-        timestamp_end = max(current_time, timestamp_start + 0.001)
+        timestamp_end = max(current_time, timestamp_start + 1)
 
         self._push_metrics_after_success(
             timestamp_end=timestamp_end,
@@ -128,33 +125,32 @@ class EtlJob:
             rows_count=rows_count,
         )
 
-    def _read_gauge(self, metric_name: str) -> float | None:
-        """Read single gauge value from Prometheus instant query result.
+    def _read_state_field(self, field_name: str) -> int | None:
+        """Read single state field from ClickHouse.
 
-        Uses instant query (not range query) to get current value of a gauge metric.
-        Returns None if metric doesn't exist or query fails, allowing caller to
-        distinguish between "metric missing" and "metric has value 0".
+        Replaces _read_gauge() for reading from ClickHouse instead of Prometheus.
+        Returns None if field doesn't exist, allowing caller to distinguish
+        between "field missing" and "field has value 0".
 
         Args:
-            metric_name: Name of the gauge metric to read
+            field_name: Name of state field to read (timestamp_progress,
+                timestamp_start, timestamp_end, etc.)
 
         Returns:
-            Metric value as float, or None if metric doesn't exist or query failed
+            Field value as int (Unix timestamp in seconds), or None if not set
         """
-        data = self._prom.query(metric_name)
-        status = data.get("status")
-        if status != "success":
-            return None
-
-        result = data.get("data", {}).get("result", [])
-        if not result:
-            return None
-
         try:
-            value = result[0]["value"][1]
-            return float(value)
-        except (KeyError, IndexError, TypeError, ValueError):
-            return None
+            state = self._ch.get_state()
+            return state.get(field_name)
+        except Exception as exc:
+            logger.error(
+                f"Failed to read state field {field_name} from ClickHouse",
+                extra={
+                    "etl_job.read_state_failed.field": field_name,
+                    "etl_job.read_state_failed.message": str(exc),
+                },
+            )
+            raise
 
     def _check_can_start(self) -> bool:
         """Check if job is allowed to start based on timestamps.
@@ -171,8 +167,8 @@ class EtlJob:
             True if job can start, False otherwise
         """
         try:
-            ts_start = self._read_gauge("etl_timestamp_start")
-            ts_end = self._read_gauge("etl_timestamp_end")
+            ts_start = self._read_state_field("timestamp_start")
+            ts_end = self._read_state_field("timestamp_end")
 
             # Both missing - first run, allow start
             if ts_start is None and ts_end is None:
@@ -236,21 +232,21 @@ class EtlJob:
             )
             return False
 
-    def _mark_start(self, timestamp_start: float) -> bool:
-        """Push TimestampStart to PushGateway.
+    def _mark_start(self, timestamp_start: int) -> bool:
+        """Save TimestampStart to ClickHouse.
 
         Marks the start of job execution atomically. This must succeed before
         processing begins to prevent concurrent runs. If this fails, job stops
         immediately without processing any data.
 
         Args:
-            timestamp_start: Unix timestamp when job started
+            timestamp_start: Unix timestamp when job started (int, seconds since epoch)
 
         Returns:
             True if start was marked successfully, False otherwise
         """
         try:
-            self._pg.push_start(timestamp_start)
+            self._ch.save_state(timestamp_start=timestamp_start)
             return True
         except Exception as exc:
             logger.error(
@@ -261,29 +257,29 @@ class EtlJob:
             )
             return False
 
-    def _load_progress(self) -> float:
-        """Load TimestampProgress from Prometheus.
+    def _load_progress(self) -> int:
+        """Load TimestampProgress from ClickHouse.
 
-        Reads the current processing progress timestamp. This metric must be
+        Reads the current processing progress timestamp. This value must be
         set before the first run to specify the starting point. Job does not
         attempt to auto-detect the oldest metric to avoid overloading Prometheus
         with expensive queries.
 
         Returns:
-            Current progress timestamp as Unix timestamp
+            Current progress timestamp as Unix timestamp (int, seconds since epoch)
 
         Raises:
-            ValueError: If TimestampProgress is not found in Prometheus.
-            Exception: If reading from Prometheus fails.
+            ValueError: If TimestampProgress is not found in ClickHouse.
+            Exception: If reading from ClickHouse fails.
         """
         try:
-            progress = self._read_gauge("etl_timestamp_progress")
+            progress = self._read_state_field("timestamp_progress")
             if progress is not None:
-                logger.info(f"Loaded progress timestamp: {int(progress)}")
+                logger.info(f"Loaded progress timestamp: {progress}")
                 return progress
         except Exception as exc:
             logger.error(
-                "Failed to read TimestampProgress from Prometheus",
+                "Failed to read TimestampProgress from ClickHouse",
                 extra={
                     "etl_job.load_progress_failed.message": str(exc),
                 },
@@ -292,20 +288,20 @@ class EtlJob:
 
         # TimestampProgress not found - this is a fatal error
         logger.error(
-            "TimestampProgress metric not found in Prometheus",
+            "TimestampProgress not found in ClickHouse",
             extra={
                 "etl_job.load_progress_failed.message": (
-                    "etl_timestamp_progress metric is required but not found. "
+                    "timestamp_progress is required but not found. "
                     "Job cannot proceed without initial progress timestamp."
                 ),
             },
         )
         raise ValueError(
-            "TimestampProgress (etl_timestamp_progress) not found in Prometheus. "
-            "Job requires this metric to determine starting point."
+            "TimestampProgress not found in ClickHouse. "
+            "Job requires this value to determine starting point."
         )
 
-    def _calc_window(self, progress: float) -> tuple[float, float]:
+    def _calc_window(self, progress: int) -> tuple[int, int]:
         """Calculate processing window based on progress and config.
 
         Determines the time range to fetch from Prometheus for this batch.
@@ -313,18 +309,18 @@ class EtlJob:
         batch_window_size_seconds.
 
         Args:
-            progress: Current progress timestamp (start of window without overlap)
+            progress: Current progress timestamp (start of window without overlap, int)
 
         Returns:
-            Tuple of (window_start, window_end) as Unix timestamps
+            Tuple of (window_start, window_end) as Unix timestamps (int)
         """
-        overlap = float(self._config.etl.batch_window_overlap_seconds)
-        window_size = float(self._config.etl.batch_window_size_seconds)
+        overlap = self._config.etl.batch_window_overlap_seconds
+        window_size = self._config.etl.batch_window_size_seconds
         window_start = progress - overlap
         window_end = progress + window_size
         return window_start, window_end
 
-    def _fetch_data(self, window_start: float, window_end: float) -> tuple[str, int]:
+    def _fetch_data(self, window_start: int, window_end: int) -> tuple[str, int]:
         """Fetch data from Prometheus for given window and write to JSONL file.
 
         Queries all metrics using {__name__=~".+"} selector to export everything
@@ -333,8 +329,8 @@ class EtlJob:
         timestamp, metric_name, labels (as JSON string), and value.
 
         Args:
-            window_start: Start of time range (Unix timestamp)
-            window_end: End of time range (Unix timestamp)
+            window_start: Start of time range (Unix timestamp, int)
+            window_end: End of time range (Unix timestamp, int)
 
         Returns:
             Tuple of (file_path, rows_count) where file_path is path to JSONL file
@@ -514,12 +510,12 @@ class EtlJob:
 
     def _push_metrics_after_success(
         self,
-        timestamp_end: float,
-        timestamp_progress: float,
+        timestamp_end: int,
+        timestamp_progress: int,
         window_seconds: int,
         rows_count: int,
     ) -> None:
-        """Push progress and batch metrics to PushGateway.
+        """Save progress and batch metrics to ClickHouse.
 
         Updates job state only after successful data write. This ensures
         progress advances only when data is actually persisted. If this fails,
@@ -533,14 +529,14 @@ class EtlJob:
             rows_count: Number of rows processed (for monitoring)
 
         Raises:
-            Exception: If PushGateway push fails
+            Exception: If ClickHouse save fails
         """
         try:
-            self._pg.push_success(
+            self._ch.save_state(
                 timestamp_end=timestamp_end,
                 timestamp_progress=timestamp_progress,
-                window_seconds=window_seconds,
-                rows_count=rows_count,
+                batch_window_seconds=window_seconds,
+                batch_rows=rows_count,
             )
             logger.info(
                 f"Metrics updated: progress={int(timestamp_progress)}, "
@@ -548,9 +544,9 @@ class EtlJob:
             )
         except Exception as exc:
             logger.error(
-                "Failed to push metrics after successful batch",
+                "Failed to save metrics after successful batch",
                 extra={
-                    "etl_job.push_metrics_failed.message": str(exc),
+                    "etl_job.save_metrics_failed.message": str(exc),
                 },
             )
             raise

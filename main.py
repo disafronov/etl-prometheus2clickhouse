@@ -12,7 +12,6 @@ from config import Config, load_config
 from etl_job import EtlJob
 from logging_config import getLogger, set_all_loggers_level
 from prometheus_client import PrometheusClient
-from pushgateway_client import PushGatewayClient
 
 logger = getLogger(__name__)
 
@@ -36,13 +35,11 @@ def main() -> None:
 
         prom_client = PrometheusClient(config.prometheus)
         ch_client = ClickHouseClient(config.clickhouse)
-        pg_client = PushGatewayClient(config.pushgateway)
 
         job = EtlJob(
             config=config,
             prometheus_client=prom_client,
             clickhouse_client=ch_client,
-            pushgateway_client=pg_client,
         )
         job.run_once()
     except Exception as exc:

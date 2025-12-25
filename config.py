@@ -8,7 +8,7 @@ timestamps are stored in Prometheus metrics and are not part of this config.
 
 from __future__ import annotations
 
-from pydantic import AliasChoices, BaseModel, Field, ValidationError, model_validator
+from pydantic import BaseModel, Field, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from logging_config import getLogger
@@ -112,6 +112,10 @@ class ClickHouseConfig(BaseSettings):
         description="Disable TLS verification when true",
     )
     table: str = Field(..., description="Target table name for inserts")
+    state_table: str = Field(
+        default="metrics.etl_state",
+        description="Table name for storing ETL job state",
+    )
 
     @model_validator(mode="after")
     def normalize_password(self) -> ClickHouseConfig:
@@ -130,66 +134,6 @@ class ClickHouseConfig(BaseSettings):
             # This is not a hardcoded password, but normalization of empty
             # password value. Empty string is required for ClickHouse
             # authentication when password is empty but user is specified.
-            self.password = ""  # nosec B105
-        return self
-
-
-class PushGatewayConfig(BaseSettings):
-    """PushGateway connection configuration.
-
-    Configuration for Prometheus PushGateway. Used only for writing job
-    state metrics. Job never reads from PushGateway (reads from Prometheus).
-    """
-
-    model_config = SettingsConfigDict(
-        env_prefix="PUSHGATEWAY_",
-        case_sensitive=False,
-        extra="ignore",
-        env_ignore_empty=True,
-    )
-
-    url: str = Field(..., description="Base URL of PushGateway")
-    token: str | None = Field(
-        default=None,
-        description="Optional bearer token for PushGateway authentication",
-    )
-    user: str | None = Field(
-        default=None,
-        description="Optional basic auth username for PushGateway",
-    )
-    password: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("PUSHGATEWAY_PASS", "password"),
-        description="Optional basic auth password for PushGateway",
-    )
-    timeout: int = Field(
-        default=10,
-        description="HTTP request timeout in seconds for PushGateway",
-    )
-    insecure: bool = Field(
-        default=False,
-        description="Disable TLS verification when true",
-    )
-    job: str = Field(..., description="PushGateway job name")
-    instance: str = Field(..., description="PushGateway instance name")
-
-    @model_validator(mode="after")
-    def normalize_password(self) -> PushGatewayConfig:
-        """Normalize password: if user is specified but password is None,
-        convert password to empty string.
-
-        This handles the case when PUSHGATEWAY_PASSWORD (or PUSHGATEWAY_PASS)
-        is set to empty string in environment variables. With env_ignore_empty=True,
-        empty strings are converted to None, but HTTP Basic Auth requires explicit
-        authentication even with empty password when user is specified.
-
-        Returns:
-            Self with normalized password field
-        """
-        if self.user is not None and self.password is None:
-            # This is not a hardcoded password, but normalization of empty
-            # password value. Empty string is required for HTTP Basic Auth
-            # when password is empty but user is specified.
             self.password = ""  # nosec B105
         return self
 
@@ -239,7 +183,6 @@ class Config(BaseModel):
 
     prometheus: PrometheusConfig
     clickhouse: ClickHouseConfig
-    pushgateway: PushGatewayConfig
     etl: EtlConfig
 
 
@@ -265,13 +208,11 @@ def load_config() -> Config:
         # variables via env_prefix
         prometheus = PrometheusConfig()  # type: ignore[call-arg]
         clickhouse = ClickHouseConfig()  # type: ignore[call-arg]
-        pushgateway = PushGatewayConfig()  # type: ignore[call-arg]
         etl = EtlConfig()
 
         return Config(
             prometheus=prometheus,
             clickhouse=clickhouse,
-            pushgateway=pushgateway,
             etl=etl,
         )
     except ValidationError as exc:
