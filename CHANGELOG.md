@@ -1,3 +1,15 @@
+## [2.0.0-rc.5](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v2.0.0-rc.4...v2.0.0-rc.5) (2025-12-25)
+
+### ⚠ BREAKING CHANGES
+
+* new columns order
+
+Signed-off-by: Dmitrii Safronov <zimniy@cyberbrain.cc>
+
+### Code Refactoring
+
+* Update ClickHouse ETL state handling and improve documentation ([c7b91bb](https://github.com/disafronov/etl-prometheus2clickhouse/commit/c7b91bb17d829b6243d32cd2a21199c441beb25b))
+
 ## [2.0.0-rc.4](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v2.0.0-rc.3...v2.0.0-rc.4) (2025-12-25)
 
 ### Features
