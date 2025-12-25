@@ -292,6 +292,10 @@
           "window_end": {
             "type": "float",
             "source": "etl_job.fetch_data_success.window_end"
+          },
+          "file_path": {
+            "type": "str",
+            "source": "etl_job.fetch_data_success.file_path"
           }
         }
       }
