@@ -72,6 +72,21 @@ def test_pushgateway_client_init_with_empty_password() -> None:
     assert client._verify is True
 
 
+def test_pushgateway_client_init_with_user_but_no_password() -> None:
+    """Client should normalize None password to empty string when user is specified.
+
+    This handles the case when PUSHGATEWAY_PASSWORD is set to empty string
+    in environment variables and env_ignore_empty=True converts it to None.
+    HTTP Basic Auth requires explicit authentication even with empty password.
+    """
+    config = _make_pushgateway_config(user="testuser", password=None)
+    # Password should be normalized to empty string by validator
+    assert config.password == ""
+    client = PushGatewayClient(config)
+    assert client._auth == ("testuser", "")
+    assert "Authorization" not in client._headers
+
+
 def test_pushgateway_client_init_with_insecure() -> None:
     """Client should disable TLS verification when insecure=True."""
     config = _make_pushgateway_config(insecure=True)

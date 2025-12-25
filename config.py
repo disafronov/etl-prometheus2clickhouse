@@ -173,6 +173,26 @@ class PushGatewayConfig(BaseSettings):
     job: str = Field(..., description="PushGateway job name")
     instance: str = Field(..., description="PushGateway instance name")
 
+    @model_validator(mode="after")
+    def normalize_password(self) -> PushGatewayConfig:
+        """Normalize password: if user is specified but password is None,
+        convert password to empty string.
+
+        This handles the case when PUSHGATEWAY_PASSWORD (or PUSHGATEWAY_PASS)
+        is set to empty string in environment variables. With env_ignore_empty=True,
+        empty strings are converted to None, but HTTP Basic Auth requires explicit
+        authentication even with empty password when user is specified.
+
+        Returns:
+            Self with normalized password field
+        """
+        if self.user is not None and self.password is None:
+            # This is not a hardcoded password, but normalization of empty
+            # password value. Empty string is required for HTTP Basic Auth
+            # when password is empty but user is specified.
+            self.password = ""  # nosec B105
+        return self
+
 
 class EtlConfig(BaseSettings):
     """ETL job configuration options.
