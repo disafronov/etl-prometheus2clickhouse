@@ -93,9 +93,18 @@ class EtlJob:
         # Calculate new progress, but never exceed current time to avoid going
         # into the future where Prometheus has no data yet
         current_time = time.time()
-        new_progress = min(
-            progress + self._config.etl.batch_window_seconds, current_time
-        )
+        expected_progress = progress + self._config.etl.batch_window_seconds
+        new_progress = min(expected_progress, current_time)
+        actual_window = new_progress - progress
+
+        # Log if window was reduced due to current time limit
+        if new_progress < expected_progress:
+            window_reduced = int(expected_progress - new_progress)
+            logger.warning(
+                f"Progress limited by current time: expected={int(expected_progress)}, "
+                f"actual={int(new_progress)}, window_reduced_by={window_reduced}s"
+            )
+
         # Ensure timestamp_end is always greater than timestamp_start.
         # TimestampEnd must never equal TimestampStart.
         timestamp_end = max(current_time, timestamp_start + 0.001)
@@ -103,12 +112,14 @@ class EtlJob:
         self._push_metrics_after_success(
             timestamp_end=timestamp_end,
             timestamp_progress=new_progress,
-            window_seconds=self._config.etl.batch_window_seconds,
+            window_seconds=int(actual_window),
             rows_count=len(rows),
         )
 
         logger.info(
-            f"ETL cycle completed: progress updated to {int(new_progress)}, "
+            f"ETL cycle completed: progress {int(progress)} -> {int(new_progress)} "
+            f"(actual={int(actual_window)}s, "
+            f"expected={self._config.etl.batch_window_seconds}s), "
             f"processed {len(rows)} rows"
         )
 
