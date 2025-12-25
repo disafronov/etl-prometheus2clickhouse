@@ -345,7 +345,7 @@ def test_clickhouse_client_insert_rows_invalid_table_name(
         {"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0},
     ]
 
-    with pytest.raises(ValueError, match="Invalid table name format"):
+    with pytest.raises(ValueError, match="Invalid table_metrics format"):
         client.insert_rows(rows)
 
     # Verify that insert was not called due to validation error
@@ -429,7 +429,7 @@ def test_clickhouse_client_insert_from_file_invalid_table_name(
         '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
     )
 
-    with pytest.raises(ValueError, match="Invalid table name format"):
+    with pytest.raises(ValueError, match="Invalid table_metrics format"):
         client.insert_from_file(str(file_path))
 
     # Verify that insert_file was not called due to validation error
@@ -846,7 +846,7 @@ def test_clickhouse_client_get_state_invalid_table_name(mock_get_client: Mock) -
     cfg = _make_clickhouse_config(table_etl="invalid-table-name!")
     client = ClickHouseClient(cfg)
 
-    with pytest.raises(ValueError, match="Invalid table name format"):
+    with pytest.raises(ValueError, match="Invalid table_etl format"):
         client.get_state()
 
     # Verify that query was not called due to validation error
@@ -1059,7 +1059,7 @@ def test_clickhouse_client_save_state_update_invalid_table_name(
     cfg = _make_clickhouse_config(table_etl="invalid-table-name!")
     client = ClickHouseClient(cfg)
 
-    with pytest.raises(ValueError, match="Invalid table name format"):
+    with pytest.raises(ValueError, match="Invalid table_etl format"):
         client.save_state(
             timestamp_start=1700000100,
             timestamp_progress=1700000000,
