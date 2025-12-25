@@ -78,7 +78,10 @@ class EtlJob:
             return
 
         logger.info(f"Job start marked at {int(timestamp_start)}")
-        logger.info(f"Processing window size: {self._config.etl.batch_window_seconds}s")
+        logger.info(
+            f"Batch window size: {self._config.etl.batch_window_size_seconds}s, "
+            f"batch window overlap: {self._config.etl.batch_window_overlap_seconds}s"
+        )
 
         progress = self._load_progress()
         window_start, window_end = self._calc_window(progress)
@@ -91,7 +94,7 @@ class EtlJob:
         # Calculate new progress, but never exceed current time to avoid going
         # into the future where Prometheus has no data yet
         current_time = time.time()
-        expected_progress = progress + self._config.etl.batch_window_seconds
+        expected_progress = progress + self._config.etl.batch_window_size_seconds
         new_progress = min(expected_progress, current_time)
         actual_window = new_progress - progress
 
@@ -295,16 +298,20 @@ class EtlJob:
         """Calculate processing window based on progress and config.
 
         Determines the time range to fetch from Prometheus for this batch.
-        Window starts at current progress and extends by batch_window_seconds.
+        Window starts at (progress - overlap) to create overlap and extends by
+        batch_window_size_seconds.
 
         Args:
-            progress: Current progress timestamp (start of window)
+            progress: Current progress timestamp (start of window without overlap)
 
         Returns:
             Tuple of (window_start, window_end) as Unix timestamps
         """
-        window_size = float(self._config.etl.batch_window_seconds)
-        return progress, progress + window_size
+        overlap = float(self._config.etl.batch_window_overlap_seconds)
+        window_size = float(self._config.etl.batch_window_size_seconds)
+        window_start = progress - overlap
+        window_end = progress + window_size
+        return window_start, window_end
 
     def _fetch_data(
         self, window_start: float, window_end: float

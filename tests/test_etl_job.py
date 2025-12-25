@@ -133,7 +133,7 @@ def _make_config() -> Config:
             job="job",
             instance="inst",
         ),
-        etl=EtlConfig(batch_window_seconds=300),
+        etl=EtlConfig(batch_window_size_seconds=300),  # overlap defaults to 0
     )
 
 
@@ -930,6 +930,70 @@ def test_etl_job_run_once_prevents_progress_from_going_into_future() -> None:
     new_progress = pg.success_calls[0]["timestamp_progress"]
     # Should not exceed current time (allow small margin for execution time)
     assert new_progress <= time.time() + 1
-    # Should not be progress_in_future + batch_window_seconds
-    expected_future_progress = progress_in_future + config.etl.batch_window_seconds
+    # Should not be progress_in_future + batch_window_size_seconds
+    expected_future_progress = progress_in_future + config.etl.batch_window_size_seconds
     assert new_progress < expected_future_progress
+
+
+def test_etl_job_calc_window_with_overlap() -> None:
+    """EtlJob._calc_window should create overlap when configured."""
+    # Use model_construct to bypass env_ignore_empty=True which ignores constructor args
+    etl_config = EtlConfig.model_construct(
+        batch_window_size_seconds=300, batch_window_overlap_seconds=20
+    )
+    config = Config(
+        prometheus=PrometheusConfig(url="http://prom:9090"),
+        clickhouse=ClickHouseConfig(url="http://ch:8123", table="db.tbl"),
+        pushgateway=PushGatewayConfig(url="http://pg:9091", job="job", instance="inst"),
+        etl=etl_config,
+    )
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+    pg = DummyPushGatewayClient()
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+        pushgateway_client=pg,
+    )
+
+    progress = 1000.0
+    window_start, window_end = job._calc_window(progress)
+
+    # Window should start at progress - overlap
+    assert window_start == 980.0  # 1000 - 20
+    # Window should end at progress + window_size
+    assert window_end == 1300.0  # 1000 + 300
+    # Window size should be window_size + overlap
+    assert window_end - window_start == 320.0  # 300 + 20
+
+
+def test_etl_job_calc_window_without_overlap() -> None:
+    """EtlJob._calc_window should work correctly without overlap."""
+    config = Config(
+        prometheus=PrometheusConfig(url="http://prom:9090"),
+        clickhouse=ClickHouseConfig(url="http://ch:8123", table="db.tbl"),
+        pushgateway=PushGatewayConfig(url="http://pg:9091", job="job", instance="inst"),
+        etl=EtlConfig(batch_window_size_seconds=300),  # overlap defaults to 0
+    )
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+    pg = DummyPushGatewayClient()
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+        pushgateway_client=pg,
+    )
+
+    progress = 1000.0
+    window_start, window_end = job._calc_window(progress)
+
+    # Window should start at progress (no overlap)
+    assert window_start == 1000.0
+    # Window should end at progress + window_size
+    assert window_end == 1300.0  # 1000 + 300
+    # Window size should be exactly window_size
+    assert window_end - window_start == 300.0

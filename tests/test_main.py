@@ -32,7 +32,7 @@ def test_main_success(
         prometheus=PrometheusConfig(url="http://prom:9090"),
         clickhouse=ClickHouseConfig(url="http://ch:8123", table="db.tbl"),
         pushgateway=PushGatewayConfig(url="http://pg:9091", job="job", instance="inst"),
-        etl=EtlConfig(batch_window_seconds=300),
+        etl=EtlConfig(batch_window_size_seconds=300),  # overlap defaults to 0
     )
     mock_load_config.return_value = mock_config
 

@@ -21,7 +21,7 @@ def test_load_config_from_env(monkeypatch) -> None:
     assert config.prometheus.url == "http://prom:9090"
     assert config.clickhouse.table == "db.tbl"
     assert config.pushgateway.job == "job"
-    assert config.etl.batch_window_seconds > 0
+    assert config.etl.batch_window_size_seconds > 0
 
 
 def test_load_config_clickhouse_timeouts_from_env(monkeypatch) -> None:
