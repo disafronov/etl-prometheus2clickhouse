@@ -38,6 +38,7 @@ class ClickHouseClient:
         """
         self._config = config
         self._table = config.table
+        self._state_table = config.state_table
 
         try:
             # Parse URL to extract host, port, and scheme
@@ -213,6 +214,131 @@ class ClickHouseClient:
                     "clickhouse_client.insert_from_file_failed.error": str(exc),
                     "clickhouse_client.insert_from_file_failed.file_path": file_path,
                     "clickhouse_client.insert_from_file_failed.table": self._table,
+                },
+            )
+            raise
+
+    def get_state(self) -> dict[str, int | None]:
+        """Read latest ETL state from ClickHouse.
+
+        Reads the most recent state record ordered by updated_at.
+        Returns None for missing fields to match Prometheus behavior.
+
+        Returns:
+            Dictionary with keys: timestamp_progress, timestamp_start,
+            timestamp_end, batch_window_seconds, batch_rows.
+            Timestamp values are int (Unix timestamp in seconds) or None if not set.
+
+        Raises:
+            Exception: If query fails
+        """
+        try:
+            # Table name comes from configuration, not user input.
+            # ClickHouse doesn't support parameterized table names in queries,
+            # so we validate the table name format and use f-string.
+            # Format: database.table or just table
+            # (allowed characters: alphanumeric, underscore, dot)
+            if not all(c.isalnum() or c in ("_", ".") for c in self._state_table):
+                raise ValueError(f"Invalid table name format: {self._state_table}")
+            query = f"""
+                SELECT
+                    timestamp_progress,
+                    timestamp_start,
+                    timestamp_end,
+                    batch_window_seconds,
+                    batch_rows
+                FROM {self._state_table}
+                ORDER BY updated_at DESC
+                LIMIT 1
+            """  # nosec B608
+            result = self._client.query(query)
+
+            if not result.result_rows:
+                return {
+                    "timestamp_progress": None,
+                    "timestamp_start": None,
+                    "timestamp_end": None,
+                    "batch_window_seconds": None,
+                    "batch_rows": None,
+                }
+
+            row = result.result_rows[0]
+            return {
+                "timestamp_progress": int(row[0]) if row[0] is not None else None,
+                "timestamp_start": int(row[1]) if row[1] is not None else None,
+                "timestamp_end": int(row[2]) if row[2] is not None else None,
+                "batch_window_seconds": row[3] if row[3] is not None else None,
+                "batch_rows": row[4] if row[4] is not None else None,
+            }
+        except Exception as exc:
+            logger.error(
+                "Failed to read state from ClickHouse",
+                extra={
+                    "clickhouse_client.get_state_failed.error": str(exc),
+                    "clickhouse_client.get_state_failed.table": self._state_table,
+                },
+            )
+            raise
+
+    def save_state(
+        self,
+        timestamp_progress: int | None = None,
+        timestamp_start: int | None = None,
+        timestamp_end: int | None = None,
+        batch_window_seconds: int | None = None,
+        batch_rows: int | None = None,
+    ) -> None:
+        """Save ETL state to ClickHouse.
+
+        Inserts new state record. ReplacingMergeTree will handle deduplication
+        if needed. All fields are optional - only provided fields are saved.
+
+        Args:
+            timestamp_progress: Progress timestamp (Unix timestamp in seconds, int)
+            timestamp_start: Start timestamp (Unix timestamp in seconds, int)
+            timestamp_end: End timestamp (Unix timestamp in seconds, int)
+            batch_window_seconds: Window size in seconds
+            batch_rows: Number of rows processed
+
+        Raises:
+            Exception: If insert fails
+        """
+        try:
+            # Build insert with only non-None values
+            columns = []
+            values = []
+
+            if timestamp_progress is not None:
+                columns.append("timestamp_progress")
+                values.append(timestamp_progress)
+            if timestamp_start is not None:
+                columns.append("timestamp_start")
+                values.append(timestamp_start)
+            if timestamp_end is not None:
+                columns.append("timestamp_end")
+                values.append(timestamp_end)
+            if batch_window_seconds is not None:
+                columns.append("batch_window_seconds")
+                values.append(batch_window_seconds)
+            if batch_rows is not None:
+                columns.append("batch_rows")
+                values.append(batch_rows)
+
+            if not columns:
+                return  # Nothing to insert
+
+            # updated_at is set by DEFAULT now()
+            self._client.insert(
+                self._state_table,
+                [values],
+                column_names=columns,
+            )
+        except Exception as exc:
+            logger.error(
+                "Failed to save state to ClickHouse",
+                extra={
+                    "clickhouse_client.save_state_failed.error": str(exc),
+                    "clickhouse_client.save_state_failed.table": self._state_table,
                 },
             )
             raise
