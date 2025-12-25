@@ -2,6 +2,8 @@
 Comprehensive tests for ClickHouseClient.
 """
 
+import io
+import logging
 from unittest.mock import Mock, patch
 
 import pytest
@@ -116,6 +118,42 @@ def test_clickhouse_client_init_connection_error(mock_get_client: Mock) -> None:
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_init_connection_error_logs_details(
+    mock_get_client: Mock,
+) -> None:
+    """Client should log error details when connection fails."""
+    mock_get_client.side_effect = Exception("stream closed: EOF")
+
+    # Capture log output
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.setLevel(logging.ERROR)
+
+    logger = logging.getLogger("clickhouse_client")
+    if logger.handlers:
+        existing_formatter = logger.handlers[0].formatter
+        if existing_formatter:
+            handler.setFormatter(existing_formatter)
+    logger.addHandler(handler)
+
+    try:
+        cfg = ClickHouseConfig(
+            url="http://ch:8123",
+            table="db.tbl",
+        )
+
+        with pytest.raises(Exception, match="stream closed: EOF"):
+            ClickHouseClient(cfg)
+
+        # Check that error message contains error details
+        output = stream.getvalue()
+        assert "Failed to create ClickHouse client" in output
+        assert "Exception: stream closed: EOF" in output
+    finally:
+        logger.removeHandler(handler)
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_insert_rows_success(mock_get_client: Mock) -> None:
     """insert_rows() should insert data successfully."""
     mock_client = Mock()
@@ -201,6 +239,53 @@ def test_clickhouse_client_insert_rows_missing_key(mock_get_client: Mock) -> Non
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_insert_rows_missing_key_logs_details(
+    mock_get_client: Mock,
+) -> None:
+    """insert_rows() should log error details when row is missing required key."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    # Capture log output
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.setLevel(logging.ERROR)
+
+    logger = logging.getLogger("clickhouse_client")
+    if logger.handlers:
+        existing_formatter = logger.handlers[0].formatter
+        if existing_formatter:
+            handler.setFormatter(existing_formatter)
+    logger.addHandler(handler)
+
+    try:
+        cfg = ClickHouseConfig(
+            url="http://ch:8123",
+            table="db.tbl",
+        )
+        client = ClickHouseClient(cfg)
+
+        rows = [
+            {
+                "timestamp": 1700000000,
+                "metric_name": "up",
+                # Missing "labels" key
+                "value": 1.0,
+            }
+        ]
+
+        with pytest.raises(KeyError):
+            client.insert_rows(rows)
+
+        # Check that error message contains error details
+        output = stream.getvalue()
+        assert "Invalid row format for ClickHouse insert" in output
+        assert "Missing key" in output
+    finally:
+        logger.removeHandler(handler)
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_insert_rows_insert_error(mock_get_client: Mock) -> None:
     """insert_rows() should raise exception when insert fails."""
     mock_client = Mock()
@@ -225,3 +310,51 @@ def test_clickhouse_client_insert_rows_insert_error(mock_get_client: Mock) -> No
 
     with pytest.raises(Exception, match="Insert failed"):
         client.insert_rows(rows)
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_insert_rows_insert_error_logs_details(
+    mock_get_client: Mock,
+) -> None:
+    """insert_rows() should log error details when insert fails."""
+    mock_client = Mock()
+    mock_client.insert.side_effect = Exception("Table not found")
+    mock_get_client.return_value = mock_client
+
+    # Capture log output
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.setLevel(logging.ERROR)
+
+    logger = logging.getLogger("clickhouse_client")
+    if logger.handlers:
+        existing_formatter = logger.handlers[0].formatter
+        if existing_formatter:
+            handler.setFormatter(existing_formatter)
+    logger.addHandler(handler)
+
+    try:
+        cfg = ClickHouseConfig(
+            url="http://ch:8123",
+            table="db.tbl",
+        )
+        client = ClickHouseClient(cfg)
+
+        rows = [
+            {
+                "timestamp": 1700000000,
+                "metric_name": "up",
+                "labels": '{"instance":"localhost"}',
+                "value": 1.0,
+            }
+        ]
+
+        with pytest.raises(Exception, match="Table not found"):
+            client.insert_rows(rows)
+
+        # Check that error message contains error details
+        output = stream.getvalue()
+        assert "Failed to insert rows into ClickHouse" in output
+        assert "Exception: Table not found" in output
+    finally:
+        logger.removeHandler(handler)

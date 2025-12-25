@@ -52,8 +52,9 @@ class ClickHouseClient:
                 verify=not config.insecure,
             )
         except Exception as exc:
+            error_details = f"{type(exc).__name__}: {exc}"
             logger.error(
-                "Failed to create ClickHouse client",
+                f"Failed to create ClickHouse client: {error_details}",
                 extra={
                     "clickhouse_client.connection_failed.error": str(exc),
                     "clickhouse_client.connection_failed.url": config.url,
@@ -86,8 +87,9 @@ class ClickHouseClient:
                 for row in rows
             ]
         except KeyError as exc:
+            error_msg = f"Invalid row format for ClickHouse insert: Missing key: {exc}"
             logger.error(
-                "Invalid row format for ClickHouse insert",
+                error_msg,
                 extra={
                     "clickhouse_client.insert_failed.error": f"Missing key: {exc}",
                     "clickhouse_client.insert_failed.table": self._table,
@@ -103,8 +105,9 @@ class ClickHouseClient:
                 column_names=list(columns),
             )
         except Exception as exc:
+            error_details = f"{type(exc).__name__}: {exc}"
             logger.error(
-                "Failed to insert rows into ClickHouse",
+                f"Failed to insert rows into ClickHouse: {error_details}",
                 extra={
                     "clickhouse_client.insert_failed.error": str(exc),
                     "clickhouse_client.insert_failed.table": self._table,
