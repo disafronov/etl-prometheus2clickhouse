@@ -542,14 +542,20 @@ class EtlJob:
     ) -> None:
         """Save progress and batch state to ClickHouse.
 
-        Updates job state only after successful data write. This ensures
+        Saves job state only after successful data write. This ensures
         progress advances only when data is actually persisted. If this fails,
         progress is not updated, but data is already in ClickHouse, so next
         run will process the same window again (idempotent behavior).
 
-        Updates the record that was created at start (with only timestamp_start
-        and NULL in other fields) by matching timestamp_start and checking that
-        timestamp_progress or timestamp_end is NULL.
+        Inserts a new record with all state fields (timestamp_progress,
+        timestamp_start, timestamp_end, batch_window_seconds, batch_rows).
+        This creates a record with ORDER BY key (timestamp_progress,
+        timestamp_start, timestamp_end), which is different from the record
+        created at start with key (NULL, timestamp_start, NULL). ReplacingMergeTree
+        does not merge these records because ORDER BY keys differ. However,
+        get_state() uses ORDER BY timestamp_progress DESC NULLS LAST to retrieve
+        the record with the highest timestamp_progress, which is the correct
+        completed state record.
 
         Args:
             timestamp_start: Job start timestamp (same as initial start record)
