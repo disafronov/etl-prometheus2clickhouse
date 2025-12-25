@@ -142,3 +142,87 @@ def test_clickhouse_config_has_default_table_etl(monkeypatch) -> None:
 
     # ETL table should have default value
     assert cfg.table_etl == "default.etl"
+
+
+def test_etl_config_rejects_zero_batch_window_size(monkeypatch) -> None:
+    """EtlConfig should reject batch_window_size_seconds equal to zero."""
+    from pydantic import ValidationError
+
+    from config import EtlConfig
+
+    # Set environment variable to trigger validation
+    monkeypatch.setenv("BATCH_WINDOW_SIZE_SECONDS", "0")
+    monkeypatch.setenv("BATCH_WINDOW_OVERLAP_SECONDS", "0")
+
+    with pytest.raises(ValidationError) as exc_info:
+        EtlConfig()
+
+    errors = exc_info.value.errors()
+    assert len(errors) > 0
+    # Check that error is for BATCH_WINDOW_SIZE_SECONDS (validation_alias)
+    assert any(error["loc"] == ("BATCH_WINDOW_SIZE_SECONDS",) for error in errors)
+
+
+def test_etl_config_rejects_negative_batch_window_size(monkeypatch) -> None:
+    """EtlConfig should reject negative batch_window_size_seconds."""
+    from pydantic import ValidationError
+
+    from config import EtlConfig
+
+    # Set environment variable to trigger validation
+    monkeypatch.setenv("BATCH_WINDOW_SIZE_SECONDS", "-1")
+    monkeypatch.setenv("BATCH_WINDOW_OVERLAP_SECONDS", "0")
+
+    with pytest.raises(ValidationError) as exc_info:
+        EtlConfig()
+
+    errors = exc_info.value.errors()
+    assert len(errors) > 0
+    # Check that error is for BATCH_WINDOW_SIZE_SECONDS (validation_alias)
+    assert any(error["loc"] == ("BATCH_WINDOW_SIZE_SECONDS",) for error in errors)
+
+
+def test_etl_config_rejects_negative_batch_window_overlap(monkeypatch) -> None:
+    """EtlConfig should reject negative batch_window_overlap_seconds."""
+    from pydantic import ValidationError
+
+    from config import EtlConfig
+
+    # Set environment variable to trigger validation
+    monkeypatch.setenv("BATCH_WINDOW_SIZE_SECONDS", "300")
+    monkeypatch.setenv("BATCH_WINDOW_OVERLAP_SECONDS", "-1")
+
+    with pytest.raises(ValidationError) as exc_info:
+        EtlConfig()
+
+    errors = exc_info.value.errors()
+    assert len(errors) > 0
+    # Check that error is for BATCH_WINDOW_OVERLAP_SECONDS (validation_alias)
+    assert any(error["loc"] == ("BATCH_WINDOW_OVERLAP_SECONDS",) for error in errors)
+
+
+def test_etl_config_accepts_valid_batch_window_values(monkeypatch) -> None:
+    """EtlConfig should accept valid batch window configuration values."""
+    from config import EtlConfig
+
+    # Set environment variables to trigger validation
+    monkeypatch.setenv("BATCH_WINDOW_SIZE_SECONDS", "300")
+    monkeypatch.setenv("BATCH_WINDOW_OVERLAP_SECONDS", "20")
+
+    cfg = EtlConfig()
+
+    assert cfg.batch_window_size_seconds == 300
+    assert cfg.batch_window_overlap_seconds == 20
+
+
+def test_etl_config_accepts_zero_overlap(monkeypatch) -> None:
+    """EtlConfig should accept zero overlap (default value)."""
+    from config import EtlConfig
+
+    # Set environment variable to trigger validation
+    monkeypatch.setenv("BATCH_WINDOW_SIZE_SECONDS", "300")
+    monkeypatch.setenv("BATCH_WINDOW_OVERLAP_SECONDS", "0")
+
+    cfg = EtlConfig()
+
+    assert cfg.batch_window_overlap_seconds == 0

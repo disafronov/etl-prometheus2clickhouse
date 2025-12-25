@@ -160,6 +160,7 @@ class EtlConfig(BaseSettings):
         default=300,
         validation_alias="BATCH_WINDOW_SIZE_SECONDS",
         description="Processing window size in seconds for each batch",
+        gt=0,
     )
     batch_window_overlap_seconds: int = Field(
         default=0,
@@ -168,6 +169,7 @@ class EtlConfig(BaseSettings):
             "Overlap in seconds. Window starts at (progress - overlap) to "
             "ensure no data is missed at boundaries. Default is 0 (no overlap)."
         ),
+        ge=0,
     )
     log_level: str = Field(
         default="INFO",
