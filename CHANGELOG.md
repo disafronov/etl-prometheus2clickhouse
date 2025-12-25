@@ -1,3 +1,9 @@
+## [1.0.0-rc.4](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0-rc.3...v1.0.0-rc.4) (2025-12-25)
+
+### Bug Fixes
+
+* ClickHouseClient URL handling ([fc9cc99](https://github.com/disafronov/etl-prometheus2clickhouse/commit/fc9cc99d76fa1191e07719565f6f08994e0d9505))
+
 ## [1.0.0-rc.3](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0-rc.2...v1.0.0-rc.3) (2025-12-25)
 
 ## [1.0.0-rc.2](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0-rc.1...v1.0.0-rc.2) (2025-12-24)
