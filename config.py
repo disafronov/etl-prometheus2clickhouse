@@ -111,7 +111,7 @@ class ClickHouseConfig(BaseSettings):
         default=False,
         description="Disable TLS verification when true",
     )
-    table: str = Field(
+    table_metrics: str = Field(
         default="default.metrics",
         description="Target table name for inserts",
     )

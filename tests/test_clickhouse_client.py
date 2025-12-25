@@ -24,7 +24,7 @@ def _make_clickhouse_config(**kwargs: object) -> ClickHouseConfig:
         "user": None,
         "password": None,
         "url": "http://ch:8123",
-        "table": "db.tbl",
+        "table_metrics": "db.tbl",
     }
     defaults.update(kwargs)
     return ClickHouseConfig(**defaults)
@@ -38,7 +38,7 @@ def test_clickhouse_client_init(mock_get_client: Mock) -> None:
 
     cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
-    assert client._table == "db.tbl"
+    assert client._table_metrics == "db.tbl"
     assert client._client == mock_client
     mock_get_client.assert_called_once_with(
         host="ch",
