@@ -947,3 +947,51 @@ def test_clickhouse_client_save_state_insert_with_batch_fields(
         [[300, 100]],
         column_names=["batch_window_seconds", "batch_rows"],
     )
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_save_state_validate_int_types(mock_get_client: Mock) -> None:
+    """save_state() should validate that all values are int before SQL construction."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    # Test with non-int value for timestamp_start
+    with pytest.raises(TypeError, match="timestamp_start must be int"):
+        client.save_state(
+            timestamp_start="not_an_int",  # type: ignore[arg-type]
+            timestamp_progress=1700000000,
+        )
+
+    # Test with non-int value for timestamp_progress
+    with pytest.raises(TypeError, match="timestamp_progress must be int"):
+        client.save_state(
+            timestamp_start=1700000100,
+            timestamp_progress="not_an_int",  # type: ignore[arg-type]
+        )
+
+    # Test with non-int value for timestamp_end
+    with pytest.raises(TypeError, match="timestamp_end must be int"):
+        client.save_state(
+            timestamp_start=1700000100,
+            timestamp_end="not_an_int",  # type: ignore[arg-type]
+        )
+
+    # Test with non-int value for batch_window_seconds
+    with pytest.raises(TypeError, match="batch_window_seconds must be int"):
+        client.save_state(
+            timestamp_start=1700000100,
+            batch_window_seconds="not_an_int",  # type: ignore[arg-type]
+        )
+
+    # Test with non-int value for batch_rows
+    with pytest.raises(TypeError, match="batch_rows must be int"):
+        client.save_state(
+            timestamp_start=1700000100,
+            batch_rows="not_an_int",  # type: ignore[arg-type]
+        )
+
+    # Verify that no SQL was executed due to validation errors
+    mock_client.command.assert_not_called()
