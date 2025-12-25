@@ -85,6 +85,12 @@ inserts. This is required because the job is designed to be idempotent: if
 PushGateway update fails after successful data write, the job will reprocess
 the same window on the next run, which may result in duplicate rows.
 
+First, create the database (if it doesn't exist):
+
+```sql
+CREATE DATABASE IF NOT EXISTS metrics;
+```
+
 Recommended table engine: `ReplacingMergeTree` or a table with deduplication
 enabled. The table schema should match the following structure:
 
