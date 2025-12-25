@@ -727,6 +727,70 @@ def test_clickhouse_client_insert_from_file_fallback_no_warning_for_small_files(
     ]
     assert len(warning_calls) == 0, "Expected no warning for small file"
 
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+@patch("clickhouse_client.logger")
+def test_clickhouse_client_insert_from_file_fallback_read_error(
+    mock_logger: Mock, mock_get_client: Mock, tmp_path
+) -> None:
+    """insert_from_file() fallback should handle file read errors."""
+    mock_client = Mock()
+    # Simulate insert_file not being available (AttributeError)
+    del mock_client.insert_file
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    # Create file with invalid JSON to trigger read error
+    file_path = tmp_path / "invalid.jsonl"
+    file_path.write_text("invalid json line\n")
+
+    with pytest.raises(Exception):
+        client.insert_from_file(str(file_path))
+
+    # Check that error was logged
+    assert mock_logger.error.call_count >= 1
+    error_messages = [call[0][0] for call in mock_logger.error.call_args_list]
+    assert any(
+        "Failed to read file for fallback insert" in msg for msg in error_messages
+    )
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+@patch("clickhouse_client.logger")
+def test_clickhouse_client_insert_from_file_fallback_insert_error(
+    mock_logger: Mock, mock_get_client: Mock, tmp_path
+) -> None:
+    """insert_from_file() fallback should handle insert_rows errors."""
+    mock_client = Mock()
+    # Simulate insert_file not being available (AttributeError)
+    del mock_client.insert_file
+    # Make insert fail to trigger fallback insert error
+    mock_client.insert.side_effect = Exception("Insert rows failed")
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    # Create valid file
+    file_path = tmp_path / "test.jsonl"
+    file_path.write_text(
+        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+    )
+
+    with pytest.raises(Exception, match="Insert rows failed"):
+        client.insert_from_file(str(file_path))
+
+    # Check that error was logged
+    assert mock_logger.error.call_count >= 1
+    error_messages = [call[0][0] for call in mock_logger.error.call_args_list]
+    assert any(
+        "Failed to insert from file into ClickHouse (fallback method)" in msg
+        for msg in error_messages
+    )
+    assert any("Insert rows failed" in msg for msg in error_messages)
+
     # Verify insert_rows was still called (fallback works)
     mock_client.insert.assert_called_once()
 
