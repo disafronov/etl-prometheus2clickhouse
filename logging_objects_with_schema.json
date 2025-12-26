@@ -290,6 +290,10 @@
           "message": {
             "type": "str",
             "source": "etl_job.fetch_failed.message"
+          },
+          "prom_response_path": {
+            "type": "str",
+            "source": "etl_job.fetch_failed.prom_response_path"
           }
         },
         "write_failed": {
