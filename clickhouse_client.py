@@ -363,10 +363,9 @@ class ClickHouseClient:
     def _get_running_job_timestamps(self, use_final: bool = True) -> list[int]:
         """Get list of timestamp_start values for running jobs.
 
-        A running job is one that has an open record (timestamp_end IS NULL
-        or timestamp_end < timestamp_start) without a corresponding closed
-        record (timestamp_end IS NOT NULL AND timestamp_end > timestamp_start)
-        for the same timestamp_start.
+        A running job is one that has an open record (timestamp_end IS NULL)
+        without a corresponding closed record (timestamp_end IS NOT NULL
+        AND timestamp_end > timestamp_start) for the same timestamp_start.
 
         This handles ReplacingMergeTree unmerged records correctly:
         - If only open record exists → job is running
@@ -392,10 +391,7 @@ class ClickHouseClient:
             SELECT DISTINCT open.timestamp_start
             FROM {self._table_etl} {final_clause} AS open
             WHERE open.timestamp_start IS NOT NULL
-              AND (
-                  open.timestamp_end IS NULL
-                  OR open.timestamp_end < open.timestamp_start
-              )
+              AND open.timestamp_end IS NULL
               AND NOT EXISTS (
                   SELECT 1
                   FROM {self._table_etl} {final_clause} AS closed
@@ -411,10 +407,9 @@ class ClickHouseClient:
     def has_running_job(self) -> bool:
         """Check if there is a running job in the ETL table.
 
-        A running job is defined as having an open record (timestamp_end IS NULL
-        or timestamp_end < timestamp_start) without a corresponding closed record
-        (timestamp_end IS NOT NULL AND timestamp_end > timestamp_start) for the
-        same timestamp_start.
+        A running job is defined as having an open record (timestamp_end IS NULL)
+        without a corresponding closed record (timestamp_end IS NOT NULL
+        AND timestamp_end > timestamp_start) for the same timestamp_start.
 
         Returns:
             True if a running job exists, False otherwise
@@ -461,9 +456,9 @@ class ClickHouseClient:
             self._validate_table_name(self._table_etl, "table_etl")
 
             # Atomic INSERT with condition: only insert if no running job exists.
-            # A running job is one that has an open record (timestamp_end IS NULL
-            # or timestamp_end < timestamp_start) without a corresponding closed
-            # record (timestamp_end IS NOT NULL AND timestamp_end > timestamp_start).
+            # A running job is one that has an open record (timestamp_end IS NULL)
+            # without a corresponding closed record (timestamp_end IS NOT NULL
+            # AND timestamp_end > timestamp_start).
             # Note: We don't use FINAL in subquery because:
             # 1. New inserts are visible immediately (before merge)
             # 2. FINAL is expensive and not needed for this check
@@ -475,10 +470,7 @@ class ClickHouseClient:
                     SELECT 1
                     FROM {self._table_etl} AS open
                     WHERE open.timestamp_start IS NOT NULL
-                      AND (
-                          open.timestamp_end IS NULL
-                          OR open.timestamp_end < open.timestamp_start
-                      )
+                      AND open.timestamp_end IS NULL
                       AND NOT EXISTS (
                           SELECT 1
                           FROM {self._table_etl} AS closed
