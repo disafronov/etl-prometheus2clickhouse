@@ -392,18 +392,20 @@ class ClickHouseClient:
         else:
             table_expr = self._table_etl
 
+        # Use LEFT JOIN instead of NOT EXISTS to avoid correlated subquery issues
+        # in ClickHouse (especially Altinity builds) when using FINAL in subqueries.
+        # The condition "closed.timestamp_start IS NULL" ensures we only get open
+        # records without a corresponding closed record.
         query = f"""
             SELECT DISTINCT open.timestamp_start
             FROM {table_expr} AS open
+            LEFT JOIN {table_expr} AS closed
+              ON closed.timestamp_start = open.timestamp_start
+              AND closed.timestamp_end IS NOT NULL
+              AND closed.timestamp_end > closed.timestamp_start
             WHERE open.timestamp_start IS NOT NULL
               AND open.timestamp_end IS NULL
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM {table_expr} AS closed
-                  WHERE closed.timestamp_start = open.timestamp_start
-                    AND closed.timestamp_end IS NOT NULL
-                    AND closed.timestamp_end > closed.timestamp_start
-              )
+              AND closed.timestamp_start IS NULL
         """  # nosec B608
 
         result = self._client.query(query)
