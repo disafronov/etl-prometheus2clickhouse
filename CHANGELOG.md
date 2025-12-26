@@ -1,3 +1,15 @@
+## [4.1.0](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.0.0...v4.1.0) (2025-12-26)
+
+### Features
+
+* Add project information retrieval from pyproject.toml ([a54e572](https://github.com/disafronov/etl-prometheus2clickhouse/commit/a54e5722b6bb62af362f1cbf6ad847f038e1f22d))
+
+### Bug Fixes
+
+* Clarify actual window calculation in ETL job ([02a97e1](https://github.com/disafronov/etl-prometheus2clickhouse/commit/02a97e1bef7835913c6ee9c989dae91a1fe18be1))
+* Extend logging schema with new field for Prometheus response path ([60a94bb](https://github.com/disafronov/etl-prometheus2clickhouse/commit/60a94bb0e2008f55cb196965f8f0ae8be296a747))
+* Improve logging for progress adjustment in ETL job ([430cce6](https://github.com/disafronov/etl-prometheus2clickhouse/commit/430cce651d861768346425099c27d279a8d9c0a5))
+
 ## [4.1.0-rc.3](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.1.0-rc.2...v4.1.0-rc.3) (2025-12-26)
 
 ### Bug Fixes
