@@ -1,3 +1,9 @@
+## [3.1.0-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.0.1...v3.1.0-rc.1) (2025-12-26)
+
+### Features
+
+* Enhance job management in ClickHouseClient with running job timestamp retrieval ([ee9bad1](https://github.com/disafronov/etl-prometheus2clickhouse/commit/ee9bad1a6a55ad4aa233b95699ef8323b9eb64bd))
+
 ## [3.0.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.0.0...v3.0.1) (2025-12-26)
 
 ## [3.0.1-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.0.0...v3.0.1-rc.1) (2025-12-26)
