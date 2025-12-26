@@ -466,26 +466,26 @@ class ClickHouseClient:
             # A running job is one that has an open record (timestamp_end IS NULL)
             # without a corresponding closed record (timestamp_end IS NOT NULL
             # AND timestamp_end > timestamp_start).
-            # Note: We don't use FINAL in subquery because:
+            # Use LEFT JOIN with COUNT to avoid correlated subquery issues
+            # in ClickHouse 25.3+ (especially Altinity builds).
+            # We don't use FINAL in subquery because:
             # 1. New inserts are visible immediately (before merge)
             # 2. FINAL is expensive and not needed for this check
             # 3. We need to check both open and closed records separately
             query = f"""
                 INSERT INTO {self._table_etl} (timestamp_start)
                 SELECT {timestamp_start}
-                WHERE NOT EXISTS (
-                    SELECT 1
+                WHERE (
+                    SELECT COUNT(*)
                     FROM {self._table_etl} AS open
+                    LEFT JOIN {self._table_etl} AS closed
+                      ON closed.timestamp_start = open.timestamp_start
+                      AND closed.timestamp_end IS NOT NULL
+                      AND closed.timestamp_end > closed.timestamp_start
                     WHERE open.timestamp_start IS NOT NULL
                       AND open.timestamp_end IS NULL
-                      AND NOT EXISTS (
-                          SELECT 1
-                          FROM {self._table_etl} AS closed
-                          WHERE closed.timestamp_start = open.timestamp_start
-                            AND closed.timestamp_end IS NOT NULL
-                            AND closed.timestamp_end > closed.timestamp_start
-                      )
-                )
+                      AND closed.timestamp_start IS NULL
+                ) = 0
             """  # nosec B608
 
             self._client.query(query)
