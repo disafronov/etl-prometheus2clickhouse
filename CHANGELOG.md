@@ -1,3 +1,9 @@
+## [4.1.0-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.0.1-rc.1...v4.1.0-rc.1) (2025-12-26)
+
+### Features
+
+* Add project information retrieval from pyproject.toml ([d3cbca0](https://github.com/disafronov/etl-prometheus2clickhouse/commit/d3cbca0a7d72e189f0c48412e1389d24279af747))
+
 ## [4.0.1-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.0.0...v4.0.1-rc.1) (2025-12-26)
 
 ### Bug Fixes
