@@ -317,7 +317,8 @@ class EtlJob:
 
         Determines the time range to fetch from Prometheus for this batch.
         Window starts at (progress - overlap) to create overlap and extends by
-        batch_window_size_seconds.
+        batch_window_size_seconds. The end point is also shifted by overlap to
+        maintain the configured window size.
 
         Args:
             progress: Current progress timestamp (start of window without overlap, int)
@@ -328,7 +329,9 @@ class EtlJob:
         overlap = self._config.etl.batch_window_overlap_seconds
         window_size = self._config.etl.batch_window_size_seconds
         window_start = progress - overlap
-        window_end = progress + window_size
+        window_end = (
+            window_start + window_size
+        )  # Maintain window_size regardless of overlap
         return window_start, window_end
 
     def _fetch_data(self, window_start: int, window_end: int) -> tuple[str, int]:
