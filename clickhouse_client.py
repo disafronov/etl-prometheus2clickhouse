@@ -360,12 +360,61 @@ class ClickHouseClient:
             )
             raise
 
+    def _get_running_job_timestamps(self, use_final: bool = True) -> list[int]:
+        """Get list of timestamp_start values for running jobs.
+
+        A running job is one that has an open record (timestamp_end IS NULL
+        or timestamp_end < timestamp_start) without a corresponding closed
+        record (timestamp_end IS NOT NULL AND timestamp_end > timestamp_start)
+        for the same timestamp_start.
+
+        This handles ReplacingMergeTree unmerged records correctly:
+        - If only open record exists → job is running
+        - If both open and closed records exist → job is completed (merge pending)
+        - If only closed record exists → job is completed
+        - If no records → no job running
+
+        Args:
+            use_final: If True, use FINAL to get merged view. If False, check
+                raw records (useful for atomic operations where FINAL is expensive).
+
+        Returns:
+            List of timestamp_start values for running jobs
+
+        Raises:
+            Exception: If query fails
+        """
+        self._validate_table_name(self._table_etl, "table_etl")
+
+        final_clause = "FINAL" if use_final else ""
+
+        query = f"""
+            SELECT DISTINCT open.timestamp_start
+            FROM {self._table_etl} {final_clause} AS open
+            WHERE open.timestamp_start IS NOT NULL
+              AND (
+                  open.timestamp_end IS NULL
+                  OR open.timestamp_end < open.timestamp_start
+              )
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM {self._table_etl} {final_clause} AS closed
+                  WHERE closed.timestamp_start = open.timestamp_start
+                    AND closed.timestamp_end IS NOT NULL
+                    AND closed.timestamp_end > closed.timestamp_start
+              )
+        """  # nosec B608
+
+        result = self._client.query(query)
+        return [int(row[0]) for row in result.result_rows]
+
     def has_running_job(self) -> bool:
         """Check if there is a running job in the ETL table.
 
-        A running job is defined as a record with timestamp_start but no timestamp_end,
-        or where timestamp_end < timestamp_start (inconsistent state indicating
-        running job).
+        A running job is defined as having an open record (timestamp_end IS NULL
+        or timestamp_end < timestamp_start) without a corresponding closed record
+        (timestamp_end IS NOT NULL AND timestamp_end > timestamp_start) for the
+        same timestamp_start.
 
         Returns:
             True if a running job exists, False otherwise
@@ -374,17 +423,8 @@ class ClickHouseClient:
             Exception: If query fails
         """
         try:
-            self._validate_table_name(self._table_etl, "table_etl")
-            query = f"""
-                SELECT timestamp_start
-                FROM {self._table_etl} FINAL
-                WHERE timestamp_start IS NOT NULL
-                  AND (timestamp_end IS NULL OR timestamp_end < timestamp_start)
-                ORDER BY timestamp_start DESC
-                LIMIT 1
-            """  # nosec B608
-            result = self._client.query(query)
-            return len(result.result_rows) > 0
+            running_timestamps = self._get_running_job_timestamps(use_final=True)
+            return len(running_timestamps) > 0
         except Exception as exc:
             error_msg = f"Failed to check for running job: {type(exc).__name__}: {exc}"
             logger.error(
@@ -402,6 +442,12 @@ class ClickHouseClient:
         Uses INSERT with subquery to atomically check condition and insert.
         Only one job can successfully mark start at a time.
 
+        Checks for running jobs using the same logic as has_running_job():
+        - If there's an open record without a closed record → job is running,
+          block start
+        - If there's both open and closed records → job is completed, allow start
+        - If there's no open record → no job running, allow start
+
         Args:
             timestamp_start: Unix timestamp when job started (int, seconds since epoch)
 
@@ -414,40 +460,46 @@ class ClickHouseClient:
         try:
             self._validate_table_name(self._table_etl, "table_etl")
 
-            # Atomic INSERT with condition: only insert if no running job exists
+            # Atomic INSERT with condition: only insert if no running job exists.
+            # A running job is one that has an open record (timestamp_end IS NULL
+            # or timestamp_end < timestamp_start) without a corresponding closed
+            # record (timestamp_end IS NOT NULL AND timestamp_end > timestamp_start).
             # Note: We don't use FINAL in subquery because:
             # 1. New inserts are visible immediately (before merge)
             # 2. FINAL is expensive and not needed for this check
-            # 3. Multiple versions of same record (before merge) will all have
-            #    same timestamp_start
+            # 3. We need to check both open and closed records separately
             query = f"""
                 INSERT INTO {self._table_etl} (timestamp_start)
                 SELECT {timestamp_start}
                 WHERE NOT EXISTS (
                     SELECT 1
-                    FROM {self._table_etl}
-                    WHERE timestamp_start IS NOT NULL
-                      AND timestamp_end IS NULL
+                    FROM {self._table_etl} AS open
+                    WHERE open.timestamp_start IS NOT NULL
+                      AND (
+                          open.timestamp_end IS NULL
+                          OR open.timestamp_end < open.timestamp_start
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM {self._table_etl} AS closed
+                          WHERE closed.timestamp_start = open.timestamp_start
+                            AND closed.timestamp_end IS NOT NULL
+                            AND closed.timestamp_end > closed.timestamp_start
+                      )
                 )
             """  # nosec B608
 
             self._client.query(query)
 
             # Verify insertion succeeded by checking if we're the only running job
-            # Use FINAL here to get merged view for verification
-            verify_query = f"""
-                SELECT timestamp_start
-                FROM {self._table_etl} FINAL
-                WHERE timestamp_start IS NOT NULL
-                  AND timestamp_end IS NULL
-                ORDER BY timestamp_start DESC
-            """  # nosec B608
+            running_timestamps = self._get_running_job_timestamps(use_final=True)
 
-            result = self._client.query(verify_query)
-
-            if result.result_rows and len(result.result_rows) == 1:
-                if result.result_rows[0][0] == timestamp_start:
-                    return True
+            # Check if we're the only running job and it's our timestamp_start
+            if (
+                len(running_timestamps) == 1
+                and running_timestamps[0] == timestamp_start
+            ):
+                return True
 
             # Insert failed or verification failed
             return False
