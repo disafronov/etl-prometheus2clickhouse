@@ -1,3 +1,9 @@
+## [4.0.1-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.0.0...v4.0.1-rc.1) (2025-12-26)
+
+### Bug Fixes
+
+* Extend logging schema with new field for Prometheus response path ([d26fdfc](https://github.com/disafronov/etl-prometheus2clickhouse/commit/d26fdfc948ee4b6c13cc230c9e5f962e98d06a84))
+
 ## [3.1.0](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.0.1...v3.1.0) (2025-12-26)
 
 ### ⚠ BREAKING CHANGES
