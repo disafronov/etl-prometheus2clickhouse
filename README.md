@@ -10,7 +10,7 @@ The job:
 - writes rows into a single ClickHouse table:
   - `timestamp` (DateTime) – metric timestamp;
   - `name` (String) – metric name;
-  - `labels` (String) – JSON-encoded labels;
+  - `labels` (JSON) – metric labels as JSON object;
   - `value` (Float64) – metric value;
 - stores job state in ClickHouse ETL table:
   - `timestamp_progress` – current processing progress timestamp;
@@ -106,7 +106,7 @@ Metrics table:
 CREATE TABLE default.metrics (
     timestamp DateTime,
     name String CODEC(ZSTD(3)),
-    labels String CODEC(ZSTD(3)),
+    labels JSON CODEC(ZSTD(3)),
     value Float64
 ) ENGINE = ReplacingMergeTree()
 PARTITION BY toYYYYMMDD(timestamp)
