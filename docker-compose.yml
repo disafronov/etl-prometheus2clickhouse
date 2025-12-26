@@ -43,7 +43,7 @@ services:
         echo "Table creation completed."
         TIMESTAMP_PROGRESS=$${INIT_TIMESTAMP_PROGRESS:-$(date +%s)}
         echo "Setting initial timestamp_progress to: $$TIMESTAMP_PROGRESS"
-        clickhouse-client --host=clickhouse --query="INSERT INTO default.etl (timestamp_progress) VALUES ($$TIMESTAMP_PROGRESS)"
+        clickhouse-client --host=clickhouse --query="INSERT INTO default.etl (timestamp_start, timestamp_end, timestamp_progress) VALUES ($$TIMESTAMP_PROGRESS, $$((TIMESTAMP_PROGRESS + 1)), $$TIMESTAMP_PROGRESS)"
         echo "Initial timestamp_progress set."
 
   prometheus:
