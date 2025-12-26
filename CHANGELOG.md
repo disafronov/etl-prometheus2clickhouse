@@ -1,3 +1,9 @@
+## [3.0.0-rc.4](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.0.0-rc.3...v3.0.0-rc.4) (2025-12-26)
+
+### Features
+
+* Add job management methods to ClickHouseClient ([a1e56b9](https://github.com/disafronov/etl-prometheus2clickhouse/commit/a1e56b9b1d4d01390e4fb332aee4030701724026))
+
 ## [3.0.0-rc.3](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.0.0-rc.2...v3.0.0-rc.3) (2025-12-25)
 
 ## [3.0.0-rc.2](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.0.0-rc.1...v3.0.0-rc.2) (2025-12-25)
