@@ -1,3 +1,9 @@
+## [4.0.0-rc.2](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.0.0-rc.1...v4.0.0-rc.2) (2025-12-26)
+
+### Features
+
+* Implement streaming ETL pipeline in ETL job ([916d901](https://github.com/disafronov/etl-prometheus2clickhouse/commit/916d901864a51363fae0b3c2826ec6ee97421e6d))
+
 ## [3.1.0-rc.6](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.1.0-rc.5...v3.1.0-rc.6) (2025-12-26)
 
 ### ⚠ BREAKING CHANGES
