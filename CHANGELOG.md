@@ -1,3 +1,9 @@
+## [3.1.0-rc.4](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.1.0-rc.3...v3.1.0-rc.4) (2025-12-26)
+
+### Features
+
+* Extend logging schema with new error handling fields ([ebc0712](https://github.com/disafronov/etl-prometheus2clickhouse/commit/ebc0712ea0e955ce1d83124d0bf123a8c25be9f4))
+
 ## [3.1.0-rc.3](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.1.0-rc.2...v3.1.0-rc.3) (2025-12-26)
 
 ## [3.1.0-rc.2](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.1.0-rc.1...v3.1.0-rc.2) (2025-12-26)
