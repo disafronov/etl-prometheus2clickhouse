@@ -937,3 +937,150 @@ def test_clickhouse_client_save_state_insert_with_batch_fields(
         [[300, 100]],
         column_names=["batch_window_seconds", "batch_rows"],
     )
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_has_running_job_when_running_exists(
+    mock_get_client: Mock,
+) -> None:
+    """has_running_job() should return True when running job exists."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    # Mock query result with running job (timestamp_start but no timestamp_end)
+    mock_result = Mock()
+    mock_result.result_rows = [[1700000100]]  # timestamp_start exists
+    mock_client.query.return_value = mock_result
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    result = client.has_running_job()
+
+    assert result is True
+    mock_client.query.assert_called_once()
+    # Verify query checks for running job
+    query_call = mock_client.query.call_args[0][0]
+    assert "timestamp_start IS NOT NULL" in query_call
+    assert "timestamp_end IS NULL" in query_call
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_has_running_job_when_no_running(
+    mock_get_client: Mock,
+) -> None:
+    """has_running_job() should return False when no running job exists."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    # Mock query result with no running job
+    mock_result = Mock()
+    mock_result.result_rows = []  # No running job
+    mock_client.query.return_value = mock_result
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    result = client.has_running_job()
+
+    assert result is False
+    mock_client.query.assert_called_once()
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_has_running_job_handles_query_error(
+    mock_get_client: Mock,
+) -> None:
+    """has_running_job() should raise exception when query fails."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    mock_client.query.side_effect = Exception("Query failed")
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    with pytest.raises(Exception, match="Query failed"):
+        client.has_running_job()
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_try_mark_start_success(mock_get_client: Mock) -> None:
+    """try_mark_start() should return True when start is marked successfully."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    # First query (INSERT) succeeds
+    # Second query (verification) returns our timestamp_start as only running job
+    mock_result_verify = Mock()
+    mock_result_verify.result_rows = [[1700000100]]  # Our timestamp_start
+    mock_client.query.side_effect = [None, mock_result_verify]  # INSERT, then verify
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    result = client.try_mark_start(1700000100)
+
+    assert result is True
+    assert mock_client.query.call_count == 2  # INSERT + verification
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_try_mark_start_when_other_job_running(
+    mock_get_client: Mock,
+) -> None:
+    """try_mark_start() should return False when another job is running."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    # INSERT succeeds, but verification shows different timestamp_start
+    mock_result_verify = Mock()
+    mock_result_verify.result_rows = [[1700000200]]  # Different timestamp_start
+    mock_client.query.side_effect = [None, mock_result_verify]
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    result = client.try_mark_start(1700000100)
+
+    assert result is False
+    assert mock_client.query.call_count == 2
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_try_mark_start_when_multiple_jobs_running(
+    mock_get_client: Mock,
+) -> None:
+    """try_mark_start() should return False when multiple jobs are running."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    # INSERT succeeds, but verification shows multiple running jobs
+    mock_result_verify = Mock()
+    mock_result_verify.result_rows = [[1700000200], [1700000100]]  # Multiple jobs
+    mock_client.query.side_effect = [None, mock_result_verify]
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    result = client.try_mark_start(1700000100)
+
+    assert result is False
+    assert mock_client.query.call_count == 2
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_try_mark_start_handles_query_error(
+    mock_get_client: Mock,
+) -> None:
+    """try_mark_start() should raise exception when query fails."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    mock_client.query.side_effect = Exception("Query failed")
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    with pytest.raises(Exception, match="Query failed"):
+        client.try_mark_start(1700000100)

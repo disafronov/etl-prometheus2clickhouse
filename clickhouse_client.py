@@ -359,3 +359,111 @@ class ClickHouseClient:
                 },
             )
             raise
+
+    def has_running_job(self) -> bool:
+        """Check if there is a running job in the ETL table.
+
+        A running job is defined as a record with timestamp_start but no timestamp_end,
+        or where timestamp_end < timestamp_start (inconsistent state indicating
+        running job).
+
+        Returns:
+            True if a running job exists, False otherwise
+
+        Raises:
+            Exception: If query fails
+        """
+        try:
+            self._validate_table_name(self._table_etl, "table_etl")
+            query = f"""
+                SELECT timestamp_start
+                FROM {self._table_etl} FINAL
+                WHERE timestamp_start IS NOT NULL
+                  AND (timestamp_end IS NULL OR timestamp_end < timestamp_start)
+                ORDER BY timestamp_start DESC
+                LIMIT 1
+            """  # nosec B608
+            result = self._client.query(query)
+            return len(result.result_rows) > 0
+        except Exception as exc:
+            error_msg = f"Failed to check for running job: {type(exc).__name__}: {exc}"
+            logger.error(
+                error_msg,
+                extra={
+                    "clickhouse_client.has_running_job_failed.error": str(exc),
+                    "clickhouse_client.has_running_job_failed.table": self._table_etl,
+                },
+            )
+            raise
+
+    def try_mark_start(self, timestamp_start: int) -> bool:
+        """Atomically try to mark job start if no other job is running.
+
+        Uses INSERT with subquery to atomically check condition and insert.
+        Only one job can successfully mark start at a time.
+
+        Args:
+            timestamp_start: Unix timestamp when job started (int, seconds since epoch)
+
+        Returns:
+            True if start was marked successfully, False if another job is running
+
+        Raises:
+            Exception: If query fails
+        """
+        try:
+            self._validate_table_name(self._table_etl, "table_etl")
+
+            # Atomic INSERT with condition: only insert if no running job exists
+            # Note: We don't use FINAL in subquery because:
+            # 1. New inserts are visible immediately (before merge)
+            # 2. FINAL is expensive and not needed for this check
+            # 3. Multiple versions of same record (before merge) will all have
+            #    same timestamp_start
+            query = f"""
+                INSERT INTO {self._table_etl} (timestamp_start)
+                SELECT {timestamp_start}
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM {self._table_etl}
+                    WHERE timestamp_start IS NOT NULL
+                      AND timestamp_end IS NULL
+                )
+            """  # nosec B608
+
+            self._client.query(query)
+
+            # Verify insertion succeeded by checking if we're the only running job
+            # Use FINAL here to get merged view for verification
+            verify_query = f"""
+                SELECT timestamp_start
+                FROM {self._table_etl} FINAL
+                WHERE timestamp_start IS NOT NULL
+                  AND timestamp_end IS NULL
+                ORDER BY timestamp_start DESC
+            """  # nosec B608
+
+            result = self._client.query(verify_query)
+
+            if result.result_rows and len(result.result_rows) == 1:
+                if result.result_rows[0][0] == timestamp_start:
+                    return True
+
+            # Insert failed or verification failed
+            return False
+
+        except Exception as exc:
+            error_msg = (
+                f"Failed to atomically mark job start: {type(exc).__name__}: {exc}"
+            )
+            logger.error(
+                error_msg,
+                extra={
+                    "clickhouse_client.try_mark_start_failed.error": str(exc),
+                    "clickhouse_client.try_mark_start_failed.timestamp_start": (
+                        timestamp_start
+                    ),
+                    "clickhouse_client.try_mark_start_failed.table": self._table_etl,
+                },
+            )
+            raise

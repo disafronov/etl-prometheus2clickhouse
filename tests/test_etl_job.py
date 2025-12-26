@@ -73,6 +73,8 @@ class DummyClickHouseClient:
         self._should_fail_get_state = False
         self._should_fail_get_state_with_value_error = False
         self._should_fail_save_state = False
+        self._should_fail_has_running_job = False
+        self._should_fail_try_mark_start = False
 
     def set_should_fail(self, should_fail: bool) -> None:
         """Configure whether insert should fail."""
@@ -162,6 +164,39 @@ class DummyClickHouseClient:
             self._state["batch_window_seconds"] = batch_window_seconds
         if batch_rows is not None:
             self._state["batch_rows"] = batch_rows
+
+    def has_running_job(self) -> bool:
+        """Mock has_running_job method."""
+        if self._should_fail_has_running_job:
+            raise Exception("ClickHouse has_running_job failed")
+
+        # A running job is one with timestamp_start but no timestamp_end
+        # or where timestamp_end < timestamp_start (inconsistent state)
+        ts_start = self._state.get("timestamp_start")
+        ts_end = self._state.get("timestamp_end")
+
+        if ts_start is None:
+            return False
+
+        # Running if no end or end < start
+        return ts_end is None or (ts_end is not None and ts_end < ts_start)
+
+    def try_mark_start(self, timestamp_start: int) -> bool:
+        """Mock try_mark_start method."""
+        if self._should_fail_try_mark_start:
+            raise Exception("ClickHouse try_mark_start failed")
+
+        # Check if there's already a running job
+        if self.has_running_job():
+            return False
+
+        # If save_state should fail, raise exception
+        if self._should_fail_save_state:
+            raise Exception("ClickHouse save_state failed")
+
+        # Mark start by calling save_state (to match real implementation)
+        self.save_state(timestamp_start=timestamp_start)
+        return True
 
 
 def _make_config(**kwargs: object) -> Config:
@@ -359,12 +394,12 @@ def test_etl_job_run_once_can_start_when_no_previous_run() -> None:
 
 
 def test_etl_job_run_once_fails_on_mark_start_error() -> None:
-    """EtlJob should raise RuntimeError if push_start fails."""
+    """EtlJob should raise RuntimeError if try_mark_start fails."""
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
 
-    ch.set_should_fail_save_state(True)
+    ch._should_fail_try_mark_start = True
 
     # Set initial state
     ch._state["timestamp_start"] = None
@@ -384,6 +419,30 @@ def test_etl_job_run_once_fails_on_mark_start_error() -> None:
     assert len(ch.inserts) == 0
     # Progress should remain unchanged (initial value)
     assert ch._state["timestamp_progress"] == 1700000000
+
+
+def test_etl_job_mark_start_returns_false_when_other_job_running() -> None:
+    """EtlJob._mark_start should return False when another job is running."""
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+
+    # Set up state with running job
+    ch._state["timestamp_start"] = 1700000100
+    ch._state["timestamp_end"] = None  # Running job
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+    )
+
+    # try_mark_start should return False because there's already a running job
+    result = job._mark_start(1700000200)
+
+    assert result is False
+    # State should not be updated (other job still running)
+    assert ch._state["timestamp_start"] == 1700000100
 
 
 def test_etl_job_run_once_fails_on_fetch_error() -> None:
@@ -512,7 +571,7 @@ def test_etl_job_run_once_fails_on_save_state_error() -> None:
     )
 
     # Make save_state fail only on second call (after write)
-    # First call (start) should succeed, second call (success) should fail
+    # First call (try_mark_start) should succeed, second call (success) should fail
     original_save_state = ch.save_state
 
     call_count = 0
@@ -520,12 +579,11 @@ def test_etl_job_run_once_fails_on_save_state_error() -> None:
     def failing_save_state_after_start(*args: object, **kwargs: object) -> None:
         nonlocal call_count
         call_count += 1
-        # First call is for start - allow it
-        if call_count == 1:
-            original_save_state(*args, **kwargs)
-        else:
-            # Second call is for success - fail it
+        # First call is for start (via try_mark_start) - allow it
+        # Second call is for success - fail it
+        if call_count == 2:
             raise Exception("ClickHouse save_state failed")
+        original_save_state(*args, **kwargs)
 
     ch.save_state = failing_save_state_after_start  # type: ignore[assignment]
 
@@ -617,13 +675,13 @@ def test_etl_job_fetch_data_parses_prometheus_response() -> None:
 
 
 def test_etl_job_check_can_start_handles_query_exception() -> None:
-    """EtlJob._check_can_start should handle exceptions from ClickHouse get_state."""
+    """EtlJob._check_can_start should handle exceptions from has_running_job."""
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
 
-    # Make get_state raise exception
-    ch.set_should_fail_get_state(True)
+    # Make has_running_job raise exception
+    ch._should_fail_has_running_job = True
 
     job = EtlJob(
         config=config,
@@ -632,8 +690,8 @@ def test_etl_job_check_can_start_handles_query_exception() -> None:
     )
 
     # Should return False and not raise exception
-    # When get_state fails, _read_state_field raises exception,
-    # which is caught in _check_can_start and returns False
+    # When has_running_job fails, exception is caught in _check_can_start
+    # and returns False
     result = job._check_can_start()
     assert result is False
 
