@@ -338,7 +338,9 @@ class EtlJob:
         Queries all metrics using {__name__=~".+"} selector to export everything
         available in Prometheus. Writes data to temporary JSONL file in streaming
         fashion to minimize memory usage. Each line contains a JSON object with
-        timestamp, name, labels (as JSON string), and value.
+        timestamp, name, labels (as JSON object), and value. Labels keys are sorted
+        and sort_keys=True is used to ensure consistent string representation for
+        ORDER BY comparison in ReplacingMergeTree.
 
         Args:
             window_start: Start of time range (Unix timestamp, int)
