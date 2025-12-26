@@ -161,7 +161,8 @@ configs:
           value Float64
       ) ENGINE = ReplacingMergeTree()
       PARTITION BY toYYYYMMDD(timestamp)
-      ORDER BY (timestamp, name, toString(labels));
+      ORDER BY (timestamp, name, toString(labels))
+      SETTINGS allow_nullable_key = 1;
 
   clickhouse_init_sql_etl:
     content: |

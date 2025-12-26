@@ -110,7 +110,8 @@ CREATE TABLE default.metrics (
     value Float64
 ) ENGINE = ReplacingMergeTree()
 PARTITION BY toYYYYMMDD(timestamp)
-ORDER BY (timestamp, name, toString(labels));
+ORDER BY (timestamp, name, toString(labels))
+SETTINGS allow_nullable_key = 1;
 ```
 
 **Note:** Table is partitioned by date (`toYYYYMMDD(timestamp)`) to improve merge
