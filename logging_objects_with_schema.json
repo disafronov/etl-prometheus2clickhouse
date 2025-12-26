@@ -1,6 +1,6 @@
 {
   "etl-prometheus2clickhouse": {
-    "v5": {
+    "v6": {
       "main": {
         "application_error": {
           "error": {
@@ -309,9 +309,9 @@
           }
         },
         "invalid_value_pair": {
-          "metric_name": {
+          "name": {
             "type": "str",
-            "source": "etl_job.invalid_value_pair.metric_name"
+            "source": "etl_job.invalid_value_pair.name"
           },
           "value_pair": {
             "type": "str",

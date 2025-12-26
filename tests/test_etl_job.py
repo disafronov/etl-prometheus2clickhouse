@@ -663,7 +663,7 @@ def test_etl_job_fetch_data_parses_prometheus_response() -> None:
 
     # Check first row structure
     row = rows[0]
-    assert row["metric_name"] == "http_requests_total"
+    assert row["name"] == "http_requests_total"
     # ClickHouse DateTime requires integer Unix timestamp
     assert row["timestamp"] == 1700000000
     assert row["value"] == 10.0

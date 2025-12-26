@@ -255,8 +255,8 @@ def test_clickhouse_client_insert_from_file_success(
     # Create test file
     file_path = tmp_path / "test.jsonl"
     file_path.write_text(
-        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
-        '{"timestamp": 1234567900, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+        '{"timestamp": 1234567890, "name": "up", "labels": "{}", "value": 1.0}\n'
+        '{"timestamp": 1234567900, "name": "up", "labels": "{}", "value": 1.0}\n'
     )
 
     client.insert_from_file(str(file_path))
@@ -285,7 +285,7 @@ def test_clickhouse_client_insert_from_file_invalid_table_name(
     # Create test file
     file_path = tmp_path / "test.jsonl"
     file_path.write_text(
-        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+        '{"timestamp": 1234567890, "name": "up", "labels": "{}", "value": 1.0}\n'
     )
 
     with pytest.raises(ValueError, match="Invalid table_metrics format"):
@@ -310,7 +310,7 @@ def test_clickhouse_client_insert_from_file_empty_table_name(
     # Create test file
     file_path = tmp_path / "test.jsonl"
     file_path.write_text(
-        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+        '{"timestamp": 1234567890, "name": "up", "labels": "{}", "value": 1.0}\n'
     )
 
     with pytest.raises(ValueError, match="table name cannot be empty"):
@@ -335,7 +335,7 @@ def test_clickhouse_client_insert_from_file_too_many_dots(
     # Create test file
     file_path = tmp_path / "test.jsonl"
     file_path.write_text(
-        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+        '{"timestamp": 1234567890, "name": "up", "labels": "{}", "value": 1.0}\n'
     )
 
     with pytest.raises(ValueError, match="too many dots"):
@@ -360,7 +360,7 @@ def test_clickhouse_client_insert_from_file_empty_part(
     # Create test file
     file_path = tmp_path / "test.jsonl"
     file_path.write_text(
-        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+        '{"timestamp": 1234567890, "name": "up", "labels": "{}", "value": 1.0}\n'
     )
 
     with pytest.raises(ValueError, match="empty part"):
@@ -423,7 +423,7 @@ def test_clickhouse_client_insert_from_file_insert_error(
 
     file_path = tmp_path / "test.jsonl"
     file_path.write_text(
-        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+        '{"timestamp": 1234567890, "name": "up", "labels": "{}", "value": 1.0}\n'
     )
 
     with pytest.raises(Exception, match="HTTP request failed"):
@@ -447,7 +447,7 @@ def test_clickhouse_client_insert_from_file_insert_error_logs_details(
 
     file_path = tmp_path / "test.jsonl"
     file_path.write_text(
-        '{"timestamp": 1234567890, "metric_name": "up", "labels": "{}", "value": 1.0}\n'
+        '{"timestamp": 1234567890, "name": "up", "labels": "{}", "value": 1.0}\n'
     )
 
     with pytest.raises(Exception):
