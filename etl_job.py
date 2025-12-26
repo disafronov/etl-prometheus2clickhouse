@@ -85,7 +85,6 @@ class EtlJob:
                 "Job cannot start: failed to mark job start in ClickHouse"
             )
 
-        logger.info(f"Job start marked at {format_timestamp_with_utc(timestamp_start)}")
         logger.info(
             f"Batch window size: {self._config.etl.batch_window_size_seconds}s, "
             f"batch window overlap: {self._config.etl.batch_window_overlap_seconds}s"
