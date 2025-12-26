@@ -181,74 +181,30 @@ class EtlJob:
     def _check_can_start(self) -> bool:
         """Check if job is allowed to start based on timestamps.
 
-        Prevents concurrent job execution by checking previous run state:
-        - Both timestamps missing: first run, allow start
-        - End exists but start missing: inconsistent state, but previous job finished
-          (has end timestamp), allow start with warning
-        - Start exists but end missing: previous job still running, block start
-        - End < Start: previous job still running (end not updated yet), block start
-        - End > Start: previous job completed, allow start
+        Prevents concurrent job execution by checking for running jobs:
+        - Looks for any record with timestamp_start but no timestamp_end
+        - If found, previous job is still running, block start
+        - If not found, allow start
 
         Returns:
             True if job can start, False otherwise
         """
         try:
-            ts_start = self._read_state_field("timestamp_start")
-            ts_end = self._read_state_field("timestamp_end")
-
-            # Both missing - first run, allow start
-            if ts_start is None and ts_end is None:
-                return True
-
-            # End exists but start doesn't - inconsistent state,
-            # but previous job finished, allow start with warning
-            if ts_start is None and ts_end is not None:
+            if self._ch.has_running_job():
                 logger.warning(
-                    (
-                        "Inconsistent state: TimestampEnd exists but "
-                        "TimestampStart is missing"
-                    ),
-                    extra={
-                        "etl_job.check_start_warning.message": (
-                            "TimestampEnd exists but TimestampStart is missing; "
-                            "previous job appears to have finished, allowing start"
-                        ),
-                    },
-                )
-                return True
-
-            # Start exists but end doesn't - previous job is still running
-            if ts_start is not None and ts_end is None:
-                logger.warning(
-                    (
-                        "Previous job is still running "
-                        "(TimestampStart exists but TimestampEnd is missing), "
-                        "skipping run"
-                    ),
+                    "Previous job is still running",
                     extra={
                         "etl_job.check_start_failed.message": (
-                            "TimestampStart exists but TimestampEnd is missing; "
-                            "previous job is still running, job will not start"
+                            "Found running job: timestamp_start exists but "
+                            "timestamp_end is missing"
                         ),
                     },
                 )
                 return False
 
-            # Both exist - check their relationship
-            # Explicit None checks ensure both values are not None before comparison
-            if ts_end is not None and ts_start is not None and ts_end < ts_start:
-                logger.warning(
-                    "Previous job is still running or ended incorrectly, skipping run",
-                    extra={
-                        "etl_job.check_start_failed.message": (
-                            "TimestampEnd is less than TimestampStart; "
-                            "job will not start"
-                        ),
-                    },
-                )
-                return False
-
+            # No running job found - allow start
             return True
+
         except Exception as exc:
             logger.error(
                 "Failed to check start condition",
@@ -259,24 +215,38 @@ class EtlJob:
             return False
 
     def _mark_start(self, timestamp_start: int) -> bool:
-        """Save TimestampStart to ClickHouse.
+        """Atomically mark job start if no other job is running.
 
-        Marks the start of job execution atomically. This must succeed before
-        processing begins to prevent concurrent runs. If this fails, job stops
-        immediately without processing any data.
+        Uses INSERT with subquery to atomically check condition and insert.
+        Only one job can successfully mark start at a time.
 
         Args:
             timestamp_start: Unix timestamp when job started (int, seconds since epoch)
 
         Returns:
-            True if start was marked successfully, False otherwise
+            True if start was marked successfully, False if another job is running
         """
         try:
-            self._ch.save_state(timestamp_start=timestamp_start)
-            return True
+            if self._ch.try_mark_start(timestamp_start):
+                logger.info(
+                    f"Job start marked atomically at "
+                    f"{format_timestamp_with_utc(timestamp_start)}"
+                )
+                return True
+            else:
+                logger.warning(
+                    "Failed to atomically mark job start - another job may be running",
+                    extra={
+                        "etl_job.mark_start_failed.message": (
+                            "Atomic insert failed or verification failed - "
+                            "another job may be running"
+                        ),
+                    },
+                )
+                return False
         except Exception as exc:
             logger.error(
-                "Failed to mark job start",
+                "Failed to atomically mark job start",
                 extra={
                     "etl_job.mark_start_failed.message": str(exc),
                 },
