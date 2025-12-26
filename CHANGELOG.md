@@ -1,3 +1,22 @@
+## [3.1.0](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.0.1...v3.1.0) (2025-12-26)
+
+### ⚠ BREAKING CHANGES
+
+* Updated all instances of 'metric_name' to 'name' in the ClickHouse client, ETL job, and related tests to maintain consistency in naming conventions.
+
+Signed-off-by: Dmitrii Safronov <zimniy@cyberbrain.cc>
+
+### Features
+
+* Add error handling for running job failures in logging schema ([81b2020](https://github.com/disafronov/etl-prometheus2clickhouse/commit/81b2020800a31e055126ca474c770a1c8ac3f323))
+* Enhance job management in ClickHouseClient with running job timestamp retrieval ([6837f07](https://github.com/disafronov/etl-prometheus2clickhouse/commit/6837f07c1cf534473356905f65ea438de58d4d0f))
+* Extend logging schema with new error handling fields ([52bf5ff](https://github.com/disafronov/etl-prometheus2clickhouse/commit/52bf5ff1d7b37aa52ae6457ceae56c56ec2cf7e9))
+* Implement streaming ETL pipeline in ETL job ([0aa1b9a](https://github.com/disafronov/etl-prometheus2clickhouse/commit/0aa1b9a9bfd9289d65f2ad6b0840166db78de28d))
+
+### Code Refactoring
+
+* Rename metric_name to name across the codebase ([707dc2b](https://github.com/disafronov/etl-prometheus2clickhouse/commit/707dc2b3bdce515778b9a34dce6062967e7c75e1))
+
 # Changelog
 
 <!-- markdownlint-disable MD024 -->
