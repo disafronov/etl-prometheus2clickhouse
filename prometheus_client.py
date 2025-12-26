@@ -55,7 +55,7 @@ class PrometheusClient:
         """Execute HTTP GET request to Prometheus API with error handling.
 
         Handles common exceptions (Timeout, ConnectionError, RequestException)
-        with structured logging. Used by query_range() method.
+        with structured logging. Used by query_range_to_file() method.
 
         Args:
             url: Full URL to Prometheus API endpoint
@@ -122,119 +122,6 @@ class PrometheusClient:
             raise
 
         return response
-
-    def _handle_response(
-        self, response: requests.Response, expression: str
-    ) -> dict[str, Any]:
-        """Validate Prometheus HTTP response and extract JSON body.
-
-        Ensures response is valid JSON and has expected structure. Raises
-        exceptions with detailed logging for debugging.
-
-        Args:
-            response: HTTP response from Prometheus API
-            expression: Query expression that was executed (for error context)
-
-        Returns:
-            Parsed JSON response as dictionary
-
-        Raises:
-            requests.RequestException: If HTTP status indicates error
-            ValueError: If response is not valid JSON or has wrong structure
-        """
-        try:
-            response.raise_for_status()
-        except requests.RequestException as exc:
-            # Try to get response body for better error diagnostics
-            # Limit to first 1000 chars to avoid logging huge responses
-            response_text = None
-            try:
-                response_text = response.text[:1000]
-            except Exception:  # nosec B110
-                # Ignore errors when reading response body - this is intentional
-                # as response may not be readable in all error scenarios
-                pass
-
-            logger.error(
-                "Prometheus query failed",
-                extra={
-                    "prometheus_client.query_failed.error": str(exc),
-                    "prometheus_client.query_failed.error_type": type(exc).__name__,
-                    "prometheus_client.query_failed.expression": expression,
-                    "prometheus_client.query_failed.url": response.url,
-                    "prometheus_client.query_failed.status_code": response.status_code,
-                    "prometheus_client.query_failed.response_preview": response_text,
-                },
-            )
-            raise
-
-        try:
-            data = response.json()
-        except ValueError as exc:
-            logger.error(
-                "Prometheus returned invalid JSON",
-                extra={
-                    "prometheus_client.invalid_response.expression": expression,
-                    "prometheus_client.invalid_response.message": str(exc),
-                },
-            )
-            raise
-
-        if not isinstance(data, dict):
-            logger.error(
-                "Prometheus returned non-dict JSON",
-                extra={
-                    "prometheus_client.invalid_response.expression": expression,
-                    "prometheus_client.invalid_response.message": (
-                        "Response root is not a dict"
-                    ),
-                },
-            )
-            raise ValueError("Prometheus returned invalid response format")
-
-        return data
-
-    def query_range(self, expr: str, start: int, end: int, step: str) -> dict[str, Any]:
-        """Execute range query.
-
-        Performs Prometheus range query (time series over time range). Used
-        for fetching metric data for processing. Step parameter controls
-        resolution of returned data points.
-
-        Args:
-            expr: PromQL expression to execute
-            start: Start timestamp (Unix timestamp in seconds, int)
-            end: End timestamp (Unix timestamp in seconds, int)
-            step: Resolution step (e.g., "300s", "1d")
-
-        Returns:
-            Prometheus API response dictionary with time series data
-
-        Raises:
-            requests.RequestException: If HTTP request fails
-            ValueError: If response is invalid
-        """
-        url = f"{self._base_url}/api/v1/query_range"
-        # requests.get accepts int values in params dict
-        params: dict[str, str | int] = {
-            "query": expr,
-            "start": start,
-            "end": end,
-            "step": step,
-        }
-        response = self._execute_request(
-            url=url,
-            params=params,
-            expr=expr,
-            query_type="query_range",
-            extra_log_fields={
-                "prometheus_client.query_range_timeout.window_seconds": int(
-                    end - start
-                ),
-                "prometheus_client.query_range_timeout.step": step,
-            },
-        )
-        return self._handle_response(response, expr)
 
     def query_range_to_file(
         self, expr: str, start: int, end: int, step: str, file_path: str
