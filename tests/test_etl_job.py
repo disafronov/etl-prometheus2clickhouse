@@ -667,7 +667,7 @@ def test_etl_job_fetch_data_parses_prometheus_response() -> None:
     # ClickHouse DateTime requires integer Unix timestamp
     assert row["timestamp"] == 1700000000
     assert row["value"] == 10.0
-    # Labels are stored as JSON object (dict) for ClickHouse JSON type
+    # Labels are stored as JSON object (not string) for ClickHouse JSON type
     labels = row["labels"]
     assert isinstance(labels, dict)
     assert "method" in labels
