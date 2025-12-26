@@ -1,3 +1,15 @@
+## [3.1.0-rc.6](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.1.0-rc.5...v3.1.0-rc.6) (2025-12-26)
+
+### ⚠ BREAKING CHANGES
+
+* Updated all instances of 'metric_name' to 'name' in the ClickHouse client, ETL job, and related tests to maintain consistency in naming conventions.
+
+Signed-off-by: Dmitrii Safronov <zimniy@cyberbrain.cc>
+
+### Code Refactoring
+
+* Rename metric_name to name across the codebase ([39f1d7e](https://github.com/disafronov/etl-prometheus2clickhouse/commit/39f1d7ef969734d978fd740ec26d7d8ba046e378))
+
 ## [3.1.0-rc.5](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.1.0-rc.4...v3.1.0-rc.5) (2025-12-26)
 
 ## [3.1.0-rc.4](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.1.0-rc.3...v3.1.0-rc.4) (2025-12-26)
