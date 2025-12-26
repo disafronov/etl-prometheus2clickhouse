@@ -385,16 +385,21 @@ class ClickHouseClient:
         """
         self._validate_table_name(self._table_etl, "table_etl")
 
-        final_clause = "FINAL" if use_final else ""
+        # Use subquery to apply FINAL when needed, as ClickHouse doesn't support
+        # "FROM table FINAL AS alias" syntax directly
+        if use_final:
+            table_expr = f"(SELECT * FROM {self._table_etl} FINAL)"  # nosec B608
+        else:
+            table_expr = self._table_etl
 
         query = f"""
             SELECT DISTINCT open.timestamp_start
-            FROM {self._table_etl} {final_clause} AS open
+            FROM {table_expr} AS open
             WHERE open.timestamp_start IS NOT NULL
               AND open.timestamp_end IS NULL
               AND NOT EXISTS (
                   SELECT 1
-                  FROM {self._table_etl} {final_clause} AS closed
+                  FROM {table_expr} AS closed
                   WHERE closed.timestamp_start = open.timestamp_start
                     AND closed.timestamp_end IS NOT NULL
                     AND closed.timestamp_end > closed.timestamp_start
