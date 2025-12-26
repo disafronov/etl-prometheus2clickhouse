@@ -171,15 +171,26 @@ class DummyClickHouseClient:
             raise Exception("ClickHouse has_running_job failed")
 
         # A running job is one with timestamp_start but no timestamp_end
-        # or where timestamp_end < timestamp_start (inconsistent state)
+        # (without a corresponding closed record with timestamp_end > timestamp_start)
         ts_start = self._state.get("timestamp_start")
         ts_end = self._state.get("timestamp_end")
 
         if ts_start is None:
             return False
 
-        # Running if no end or end < start
-        return ts_end is None or (ts_end is not None and ts_end < ts_start)
+        # Running if no end (open record) and no closed record exists
+        # In mock, we only have one record, so check if it's open
+        if ts_end is None:
+            return True
+
+        # If timestamp_end exists and is greater than timestamp_start,
+        # job is completed (closed record exists)
+        if ts_end is not None and ts_end > ts_start:
+            return False
+
+        # If timestamp_end exists but is <= timestamp_start, it's invalid state,
+        # but we don't treat it as running (new logic doesn't check this)
+        return False
 
     def try_mark_start(self, timestamp_start: int) -> bool:
         """Mock try_mark_start method."""
@@ -266,15 +277,20 @@ def test_etl_job_run_once_success() -> None:
     assert ch._state["batch_rows"] == 2
 
 
-def test_etl_job_run_once_cannot_start_when_end_less_than_start() -> None:
-    """EtlJob should raise RuntimeError when TimestampEnd < TimestampStart."""
+def test_etl_job_run_once_can_start_when_end_less_than_start() -> None:
+    """EtlJob should start when TimestampEnd < TimestampStart.
+
+    Invalid state (timestamp_end < timestamp_start) is not treated as running
+    job in new logic, so job can start.
+    """
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
 
-    # Set end < start (previous job still running)
+    # Set end < start (invalid state, but not treated as running)
     ch._state["timestamp_start"] = 1700000100
     ch._state["timestamp_end"] = 1700000000
+    ch._state["timestamp_progress"] = 1700000000
 
     job = EtlJob(
         config=config,
@@ -282,13 +298,14 @@ def test_etl_job_run_once_cannot_start_when_end_less_than_start() -> None:
         clickhouse_client=ch,
     )
 
-    with pytest.raises(RuntimeError, match="Job cannot start"):
-        job.run_once()
+    # Job should be able to start (invalid state doesn't block)
+    job.run_once()
 
-    # Should not proceed - state should remain unchanged
-    assert ch._state["timestamp_start"] == 1700000100  # Unchanged
-    assert len(ch.inserts) == 0
-    assert ch._state["timestamp_progress"] is None  # Not set yet
+    # Job should proceed - new timestamp_start should be set
+    assert ch._state["timestamp_start"] != 1700000100  # Changed
+    # Progress should be updated
+    assert ch._state["timestamp_progress"] is not None
+    assert ch._state["timestamp_progress"] > 1700000000
 
 
 def test_etl_job_run_once_can_start_when_end_exists_but_start_missing() -> None:
