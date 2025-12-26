@@ -19,28 +19,15 @@ class DummyPromClient:
     """Test double for PrometheusClient."""
 
     def __init__(self) -> None:
-        self.query_calls: list[str] = []
         self.query_range_calls: list[dict[str, Any]] = []
-        self._query_responses: dict[str, dict[str, Any]] = {}
         self._query_range_response: dict[str, Any] = {
             "status": "success",
             "data": {"result": []},
         }
 
-    def set_query_response(self, expr: str, response: dict[str, Any]) -> None:
-        """Set mock response for query(expr)."""
-        self._query_responses[expr] = response
-
     def set_query_range_response(self, response: dict[str, Any]) -> None:
         """Set mock response for query_range()."""
         self._query_range_response = response
-
-    def query(self, expr: str) -> dict[str, Any]:
-        """Mock query method."""
-        self.query_calls.append(expr)
-        if expr in self._query_responses:
-            return self._query_responses[expr]
-        return {"status": "success", "data": {"result": []}}
 
     def query_range(
         self,
