@@ -19,7 +19,6 @@ import os
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
 
 from clickhouse_client import ClickHouseClient
 from config import Config
@@ -421,17 +420,25 @@ class EtlJob:
                             )
                             continue
 
-                        # Serialize labels to JSON string for ClickHouse
-                        labels_json = self._serialize_labels(labels)
+                        # Prepare labels with sorted keys for consistent ORDER BY
+                        # comparison. ClickHouse JSON type expects JSON object,
+                        # not string. toString(labels) in ORDER BY will use
+                        # consistent string representation for deduplication.
+                        labels_sorted = dict(sorted(labels.items()))
 
                         # Write row as JSON line (JSONEachRow format for ClickHouse)
+                        # sort_keys=True ensures consistent string representation
+                        # for ORDER BY comparison
                         row = {
                             "timestamp": ts,
                             "name": metric_name,
-                            "labels": labels_json,
+                            "labels": labels_sorted,
                             "value": value,
                         }
-                        f.write(json.dumps(row, separators=(",", ":")) + "\n")
+                        f.write(
+                            json.dumps(row, separators=(",", ":"), sort_keys=True)
+                            + "\n"
+                        )
                         rows_count += 1
         except Exception as exc:
             # Clean up file on error
@@ -490,22 +497,6 @@ class EtlJob:
         except Exception:  # nosec B110
             # Ignore cleanup errors (file may not exist or already deleted)
             pass
-
-    @staticmethod
-    def _serialize_labels(labels: dict[str, Any]) -> str:
-        """Serialize labels dictionary to JSON string.
-
-        Converts metric labels to compact JSON format (no spaces) for storage
-        in ClickHouse String column. This preserves all label information while
-        keeping storage efficient.
-
-        Args:
-            labels: Dictionary of label key-value pairs
-
-        Returns:
-            JSON string representation of labels
-        """
-        return json.dumps(labels, separators=(",", ":"))
 
     def _save_state_after_success(
         self,

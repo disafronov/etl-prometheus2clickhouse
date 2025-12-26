@@ -161,7 +161,7 @@ configs:
           value Float64
       ) ENGINE = ReplacingMergeTree()
       PARTITION BY toYYYYMMDD(timestamp)
-      ORDER BY (timestamp, name, labels);
+      ORDER BY (timestamp, name, toString(labels));
 
   clickhouse_init_sql_etl:
     content: |
