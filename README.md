@@ -109,8 +109,14 @@ CREATE TABLE default.metrics (
     labels String CODEC(ZSTD(3)),
     value Float64
 ) ENGINE = ReplacingMergeTree()
+PARTITION BY toYYYYMMDD(timestamp)
 ORDER BY (timestamp, metric_name, labels);
 ```
+
+**Note:** Table is partitioned by date (`toYYYYMMDD(timestamp)`) to improve merge
+performance. Without partitioning, all data goes into a single partition, causing
+slow merges as data volume grows. With daily partitioning, merges only affect
+small date ranges, significantly improving performance.
 
 ETL state table:
 
