@@ -278,4 +278,97 @@ def test_prometheus_client_query_range_without_extra_log_fields(mock_get: Mock) 
         extra_log_fields=None,
     )
 
+    # Verify response was returned successfully
     assert response.status_code == 200
+
+
+@patch("prometheus_client.requests.get")
+def test_prometheus_client_query_range_to_file_success(
+    mock_get: Mock, tmp_path
+) -> None:
+    """query_range_to_file() should stream response to file."""
+    config = _make_prometheus_config()
+    client = PrometheusClient(config)
+
+    # Create mock response with iter_content
+    mock_response = Mock(spec=requests.Response)
+    mock_response.status_code = 200
+    mock_response.url = "http://prom:9090/api/v1/query_range"
+    mock_response.raise_for_status.return_value = None
+    mock_response.iter_content.return_value = [
+        b'{"status":"success","data":{"result":[',
+        b'{"metric":{"__name__":"up"},"values":[[1700000000,"1"]]}',
+        b"]}}",
+    ]
+    mock_get.return_value = mock_response
+
+    file_path = tmp_path / "prometheus_response.json"
+    client.query_range_to_file(
+        "up", start=1700000000, end=1700000300, step="300s", file_path=str(file_path)
+    )
+
+    # Verify file was created and contains response
+    assert file_path.exists()
+    content = file_path.read_bytes()
+    assert b"status" in content
+    assert b"up" in content
+    mock_response.iter_content.assert_called_once_with(chunk_size=8192)
+
+
+@patch("prometheus_client.requests.get")
+@patch("prometheus_client.logger")
+def test_prometheus_client_query_range_to_file_http_error(
+    mock_logger: Mock, mock_get: Mock, tmp_path
+) -> None:
+    """query_range_to_file() should raise exception on HTTP error."""
+    config = _make_prometheus_config()
+    client = PrometheusClient(config)
+
+    mock_response = Mock(spec=requests.Response)
+    mock_response.status_code = 500
+    mock_response.url = "http://prom:9090/api/v1/query_range"
+    mock_response.text = "Internal Server Error"
+    mock_response.raise_for_status.side_effect = requests.HTTPError("500 Server Error")
+    mock_get.return_value = mock_response
+
+    file_path = tmp_path / "prometheus_response.json"
+
+    with pytest.raises(requests.HTTPError):
+        client.query_range_to_file(
+            "up",
+            start=1700000000,
+            end=1700000300,
+            step="300s",
+            file_path=str(file_path),
+        )
+
+    # File should not be created on error
+    assert not file_path.exists()
+
+
+@patch("prometheus_client.requests.get")
+def test_prometheus_client_query_range_to_file_write_error(
+    mock_get: Mock, tmp_path
+) -> None:
+    """query_range_to_file() should raise exception on file write error."""
+    config = _make_prometheus_config()
+    client = PrometheusClient(config)
+
+    mock_response = Mock(spec=requests.Response)
+    mock_response.status_code = 200
+    mock_response.url = "http://prom:9090/api/v1/query_range"
+    mock_response.raise_for_status.return_value = None
+    mock_response.iter_content.return_value = [b"test data"]
+    mock_get.return_value = mock_response
+
+    # Use invalid path to cause write error
+    file_path = "/nonexistent/directory/file.json"
+
+    with pytest.raises(OSError):
+        client.query_range_to_file(
+            "up",
+            start=1700000000,
+            end=1700000300,
+            step="300s",
+            file_path=file_path,
+        )

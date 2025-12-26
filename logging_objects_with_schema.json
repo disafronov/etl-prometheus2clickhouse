@@ -152,6 +152,20 @@
             "source": "prometheus_client.query_range_request_failed.url"
           }
         },
+        "query_range_to_file_failed": {
+          "error": {
+            "type": "str",
+            "source": "prometheus_client.query_range_to_file_failed.error"
+          },
+          "file_path": {
+            "type": "str",
+            "source": "prometheus_client.query_range_to_file_failed.file_path"
+          },
+          "expression": {
+            "type": "str",
+            "source": "prometheus_client.query_range_to_file_failed.expression"
+          }
+        },
         "invalid_response": {
           "expression": {
             "type": "str",
