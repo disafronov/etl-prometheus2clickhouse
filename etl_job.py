@@ -136,13 +136,16 @@ class EtlJob:
         actual_window = new_progress - progress
 
         # Log if window was reduced due to current time limit
+        # This is expected behavior: system should not process future data
+        # that doesn't exist in Prometheus yet
         if new_progress < expected_progress:
             window_reduced = int(expected_progress - new_progress)
-            logger.warning(
-                f"Progress limited by current time: "
+            logger.info(
+                f"Progress adjusted to current time (expected behavior): "
                 f"expected={format_timestamp_with_utc(int(expected_progress))}, "
                 f"actual={format_timestamp_with_utc(int(new_progress))}, "
-                f"window_reduced_by={window_reduced}s"
+                f"window_reduced_by={window_reduced}s. "
+                f"This is normal - system prevents processing future data."
             )
 
         # Ensure timestamp_end is always greater than timestamp_start.
