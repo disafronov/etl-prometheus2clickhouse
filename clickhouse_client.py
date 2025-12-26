@@ -101,7 +101,7 @@ class ClickHouseClient:
 
         Args:
             file_path: Path to JSONL file with data in JSONEachRow format.
-                Each line must be a JSON object with keys: timestamp, metric_name,
+                Each line must be a JSON object with keys: timestamp, name,
                 labels (JSON string), and value.
 
         Raises:

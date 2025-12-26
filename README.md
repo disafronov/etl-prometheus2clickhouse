@@ -9,7 +9,7 @@ The job:
 - reads all metrics from Prometheus using `query_range` (always exports all metrics);
 - writes rows into a single ClickHouse table:
   - `timestamp` (DateTime) – metric timestamp;
-  - `metric_name` (String) – metric name;
+  - `name` (String) – metric name;
   - `labels` (String) – JSON-encoded labels;
   - `value` (Float64) – metric value;
 - stores job state in ClickHouse ETL table:
@@ -105,12 +105,12 @@ Metrics table:
 ```sql
 CREATE TABLE default.metrics (
     timestamp DateTime,
-    metric_name String CODEC(ZSTD(3)),
+    name String CODEC(ZSTD(3)),
     labels String CODEC(ZSTD(3)),
     value Float64
 ) ENGINE = ReplacingMergeTree()
 PARTITION BY toYYYYMMDD(timestamp)
-ORDER BY (timestamp, metric_name, labels);
+ORDER BY (timestamp, name, labels);
 ```
 
 **Note:** Table is partitioned by date (`toYYYYMMDD(timestamp)`) to improve merge

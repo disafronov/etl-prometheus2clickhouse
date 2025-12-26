@@ -339,7 +339,7 @@ class EtlJob:
         Queries all metrics using {__name__=~".+"} selector to export everything
         available in Prometheus. Writes data to temporary JSONL file in streaming
         fashion to minimize memory usage. Each line contains a JSON object with
-        timestamp, metric_name, labels (as JSON string), and value.
+        timestamp, name, labels (as JSON string), and value.
 
         Args:
             window_start: Start of time range (Unix timestamp, int)
@@ -409,9 +409,7 @@ class EtlJob:
                             logger.warning(
                                 "Skipping invalid value pair in Prometheus response",
                                 extra={
-                                    "etl_job.invalid_value_pair.metric_name": (
-                                        metric_name
-                                    ),
+                                    "etl_job.invalid_value_pair.name": (metric_name),
                                     "etl_job.invalid_value_pair.value_pair": str(
                                         value_pair
                                     ),
@@ -429,7 +427,7 @@ class EtlJob:
                         # Write row as JSON line (JSONEachRow format for ClickHouse)
                         row = {
                             "timestamp": ts,
-                            "metric_name": metric_name,
+                            "name": metric_name,
                             "labels": labels_json,
                             "value": value,
                         }
