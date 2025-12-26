@@ -1,3 +1,9 @@
+## [4.1.0-rc.2](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.1.0-rc.1...v4.1.0-rc.2) (2025-12-26)
+
+### Bug Fixes
+
+* Improve logging for progress adjustment in ETL job ([95d5511](https://github.com/disafronov/etl-prometheus2clickhouse/commit/95d5511ff18da2d5ee24d6b6801e0e5300cf6acf))
+
 ## [4.1.0-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.0.1-rc.1...v4.1.0-rc.1) (2025-12-26)
 
 ### Features
