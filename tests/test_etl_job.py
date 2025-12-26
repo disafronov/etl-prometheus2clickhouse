@@ -19,7 +19,6 @@ class DummyPromClient:
     """Test double for PrometheusClient."""
 
     def __init__(self) -> None:
-        self.query_range_calls: list[dict[str, Any]] = []
         self.query_range_to_file_calls: list[dict[str, Any]] = []
         self._query_range_response: dict[str, Any] = {
             "status": "success",
@@ -27,21 +26,8 @@ class DummyPromClient:
         }
 
     def set_query_range_response(self, response: dict[str, Any]) -> None:
-        """Set mock response for query_range() and query_range_to_file()."""
+        """Set mock response for query_range_to_file()."""
         self._query_range_response = response
-
-    def query_range(
-        self,
-        expr: str,
-        start: int,
-        end: int,
-        step: str,
-    ) -> dict[str, Any]:
-        """Mock query_range method."""
-        self.query_range_calls.append(
-            {"expr": expr, "start": start, "end": end, "step": step}
-        )
-        return self._query_range_response
 
     def query_range_to_file(
         self, expr: str, start: int, end: int, step: str, file_path: str
