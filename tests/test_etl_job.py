@@ -20,13 +20,14 @@ class DummyPromClient:
 
     def __init__(self) -> None:
         self.query_range_calls: list[dict[str, Any]] = []
+        self.query_range_to_file_calls: list[dict[str, Any]] = []
         self._query_range_response: dict[str, Any] = {
             "status": "success",
             "data": {"result": []},
         }
 
     def set_query_range_response(self, response: dict[str, Any]) -> None:
-        """Set mock response for query_range()."""
+        """Set mock response for query_range() and query_range_to_file()."""
         self._query_range_response = response
 
     def query_range(
@@ -41,6 +42,24 @@ class DummyPromClient:
             {"expr": expr, "start": start, "end": end, "step": step}
         )
         return self._query_range_response
+
+    def query_range_to_file(
+        self, expr: str, start: int, end: int, step: str, file_path: str
+    ) -> None:
+        """Mock query_range_to_file method - writes response JSON to file."""
+        self.query_range_to_file_calls.append(
+            {
+                "expr": expr,
+                "start": start,
+                "end": end,
+                "step": step,
+                "file_path": file_path,
+            }
+        )
+        import json
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(self._query_range_response, f)
 
 
 class DummyClickHouseClient:
@@ -460,11 +479,11 @@ def test_etl_job_run_once_fails_on_fetch_error() -> None:
     ch._state["timestamp_end"] = None
     ch._state["timestamp_progress"] = 1700000000
 
-    # Make query_range raise exception
-    def failing_query_range(*_: object, **__: object) -> dict[str, Any]:
-        raise Exception("Prometheus query_range failed")
+    # Make query_range_to_file raise exception
+    def failing_query_range_to_file(*_: object, **__: object) -> None:
+        raise Exception("Prometheus query_range_to_file failed")
 
-    prom.query_range = failing_query_range  # type: ignore[assignment]
+    prom.query_range_to_file = failing_query_range_to_file  # type: ignore[assignment]
 
     job = EtlJob(
         config=config,
@@ -472,7 +491,7 @@ def test_etl_job_run_once_fails_on_fetch_error() -> None:
         clickhouse_client=ch,
     )
 
-    with pytest.raises(Exception, match="Prometheus query_range failed"):
+    with pytest.raises(Exception, match="Prometheus query_range_to_file failed"):
         job.run_once()
 
     # Should not write or save state
@@ -1082,22 +1101,33 @@ def test_etl_job_fetch_data_handles_file_cleanup_error_on_write_error() -> None:
     mock_file.__enter__ = MagicMock(return_value=mock_file)
     mock_file.__exit__ = MagicMock(return_value=False)
 
-    # Mock tempfile.mkstemp to return a file descriptor and path
+    # Mock tempfile.mkstemp to return file descriptors and paths for both files
     import tempfile
 
     temp_dir = tempfile.gettempdir()
-    fd = 123  # Dummy file descriptor
-    file_path = f"{temp_dir}/etl_batch_test.jsonl"
+    prom_fd = 123  # Dummy file descriptor for Prometheus response
+    prom_file_path = f"{temp_dir}/prometheus_raw_test.json"
+    output_fd = 124  # Dummy file descriptor for output
+    output_file_path = f"{temp_dir}/etl_processed_test.jsonl"
+
+    # Mock mkstemp to return different values for each call
+    # First call: Prometheus response file, Second call: output file
+    mkstemp_calls = [
+        (prom_fd, prom_file_path),
+        (output_fd, output_file_path),
+    ]
 
     # Mock os.fdopen to return file that fails on write
-    # and os.unlink to fail during cleanup (to test nested exception handling)
+    # Mock os.close to not fail on dummy file descriptors
+    # Mock os.unlink to fail during cleanup (to test nested exception handling)
     with (
-        patch("etl_job.tempfile.mkstemp", return_value=(fd, file_path)),
+        patch("etl_job.tempfile.mkstemp", side_effect=mkstemp_calls),
+        patch("etl_job.os.close"),  # Don't fail on dummy file descriptors
         patch("etl_job.os.fdopen", return_value=mock_file),
         patch("etl_job.os.unlink", side_effect=OSError("Permission denied")),
     ):
         # Should raise original write error, not cleanup error
-        # Cleanup error should be silently ignored (lines 441-443)
+        # Cleanup error should be silently ignored
         with pytest.raises(OSError, match="Disk full"):
             job._fetch_data(1700000000, 1700000300)
 

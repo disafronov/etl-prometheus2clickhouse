@@ -2,14 +2,19 @@
 """
 Core ETL job implementation.
 
-Implements the ETL algorithm:
+Implements streaming ETL algorithm with three distinct stages:
 - Check start condition via TimestampStart/TimestampEnd from ClickHouse.
 - Mark start by saving new TimestampStart to ClickHouse.
 - Read TimestampProgress from ClickHouse (required, job fails if not found).
 - Calculate processing window based on progress and batch window size.
-- Fetch data from Prometheus and write to ClickHouse in a single batch.
+- Extract: Stream Prometheus response to file (prometheus_raw_*.json)
+- Transform: Stream parse JSON, process and transform data to ClickHouse format
+- Load: Stream processed data to ClickHouse (etl_processed_*.jsonl)
 - Save updated progress and end timestamps, plus window size and rows count
   to ClickHouse.
+
+All data processing is done in streaming fashion without loading data into
+memory, enabling handling of very large Prometheus responses.
 """
 
 from __future__ import annotations
@@ -19,6 +24,8 @@ import os
 import tempfile
 import time
 from pathlib import Path
+
+import ijson  # type: ignore[import-untyped]
 
 from clickhouse_client import ClickHouseClient
 from config import Config
@@ -333,14 +340,15 @@ class EtlJob:
         return window_start, window_end
 
     def _fetch_data(self, window_start: int, window_end: int) -> tuple[str, int]:
-        """Fetch data from Prometheus for given window and write to JSONL file.
+        """Fetch data from Prometheus and transform to ClickHouse format.
 
-        Queries all metrics using {__name__=~".+"} selector to export everything
-        available in Prometheus. Writes data to temporary JSONL file in streaming
-        fashion to minimize memory usage. Each line contains a JSON object with
-        timestamp, name, labels (as JSON object), and value. Labels keys are sorted
-        and sort_keys=True is used to ensure consistent string representation for
-        ORDER BY comparison in ReplacingMergeTree.
+        Implements streaming ETL pipeline with three stages:
+        1. Extract: Stream Prometheus response to file (prometheus_raw_*.json)
+        2. Transform: Stream parse JSON, process and transform data
+        3. Load: Return processed file path (handled by insert_from_file)
+
+        Queries all metrics using {__name__=~".+"} selector. All processing
+        is done in streaming fashion without loading data into memory.
 
         Args:
             window_start: Start of time range (Unix timestamp, int)
@@ -348,52 +356,58 @@ class EtlJob:
 
         Returns:
             Tuple of (file_path, rows_count) where file_path is path to JSONL file
-            and rows_count is number of rows written
+            with processed data and rows_count is number of rows written
 
         Raises:
-            Exception: If Prometheus query fails or file write fails
+            Exception: If Prometheus query fails, JSON parsing fails, or file
+                write fails
         """
+        step = f"{self._config.prometheus.query_step_seconds}s"
+
+        # Stage 1 - Extract: Stream Prometheus response to file
+        prom_response_fd, prom_response_path = self._create_temp_file(
+            prefix="prometheus_raw_", suffix=".json"
+        )
+        os.close(prom_response_fd)
+
         try:
-            step = f"{self._config.prometheus.query_step_seconds}s"
-            # Always query all metrics: {__name__=~".+"}
-            data = self._prom.query_range(
+            # Stream Prometheus response directly to file
+            self._prom.query_range_to_file(
                 '{__name__=~".+"}',
                 start=window_start,
                 end=window_end,
                 step=step,
+                file_path=prom_response_path,
             )
         except Exception as exc:
+            # Clean up file if request failed
+            self._cleanup_temp_file(prom_response_path)
             logger.error(
                 "Failed to fetch data from Prometheus",
                 extra={
                     "etl_job.fetch_failed.message": str(exc),
+                    "etl_job.fetch_failed.prom_response_path": prom_response_path,
                 },
             )
             raise
 
-        result = data.get("data", {}).get("result", [])
-
-        if not result:
-            logger.warning(
-                "No metrics found in Prometheus for the specified time window",
-                extra={
-                    "etl_job.fetch_data_empty_result.window_start": window_start,
-                    "etl_job.fetch_data_empty_result.window_end": window_end,
-                    "etl_job.fetch_data_empty_result.step": step,
-                },
-            )
-            # Create empty file to maintain consistent interface
-            fd, file_path = self._create_temp_file()
-            os.close(fd)
-            return file_path, 0
-
-        # Create temporary file for streaming write
-        fd, file_path = self._create_temp_file()
+        # Stage 2 - Transform: Stream parse JSON and process data
+        output_fd, output_file_path = self._create_temp_file(
+            prefix="etl_processed_", suffix=".jsonl"
+        )
 
         rows_count = 0
+        series_count = 0
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                for series in result:
+            with (
+                open(prom_response_path, "rb") as input_f,
+                os.fdopen(output_fd, "w", encoding="utf-8") as output_f,
+            ):
+                # Stream parse JSON array items
+                parser = ijson.items(input_f, "data.result.item")
+
+                for series in parser:
+                    series_count += 1
                     metric = series.get("metric", {})
                     metric_name = metric.get("__name__", "")
                     labels = metric.copy()
@@ -410,7 +424,7 @@ class EtlJob:
                             logger.warning(
                                 "Skipping invalid value pair in Prometheus response",
                                 extra={
-                                    "etl_job.invalid_value_pair.name": (metric_name),
+                                    "etl_job.invalid_value_pair.name": metric_name,
                                     "etl_job.invalid_value_pair.value_pair": str(
                                         value_pair
                                     ),
@@ -437,41 +451,66 @@ class EtlJob:
                             "labels": labels_sorted,
                             "value": value,
                         }
-                        f.write(
+                        output_f.write(
                             json.dumps(row, separators=(",", ":"), sort_keys=True)
                             + "\n"
                         )
                         rows_count += 1
+
         except Exception as exc:
-            # Clean up file on error
-            self._cleanup_temp_file(file_path)
+            # Clean up both files on error
+            self._cleanup_temp_file(prom_response_path)
+            self._cleanup_temp_file(output_file_path)
             logger.error(
-                "Failed to write data to temporary file",
+                "Failed to transform data from Prometheus response",
                 extra={
                     "etl_job.fetch_write_failed.message": str(exc),
-                    "etl_job.fetch_write_failed.file_path": file_path,
+                    "etl_job.fetch_write_failed.prom_response_path": (
+                        prom_response_path
+                    ),
+                    "etl_job.fetch_write_failed.output_file_path": output_file_path,
                 },
             )
             raise
+        finally:
+            # Always clean up Prometheus response file after processing
+            self._cleanup_temp_file(prom_response_path)
+
+        if rows_count == 0:
+            logger.warning(
+                "No metrics found in Prometheus for the specified time window",
+                extra={
+                    "etl_job.fetch_data_empty_result.window_start": window_start,
+                    "etl_job.fetch_data_empty_result.window_end": window_end,
+                    "etl_job.fetch_data_empty_result.step": step,
+                },
+            )
 
         logger.info(
-            f"Parsed {rows_count} data points from {len(result)} metric series",
+            f"Parsed {rows_count} data points from {series_count} metric series",
             extra={
-                "etl_job.fetch_data_success.series_count": len(result),
+                "etl_job.fetch_data_success.series_count": series_count,
                 "etl_job.fetch_data_success.rows_count": rows_count,
                 "etl_job.fetch_data_success.window_start": window_start,
                 "etl_job.fetch_data_success.window_end": window_end,
-                "etl_job.fetch_data_success.file_path": file_path,
+                "etl_job.fetch_data_success.file_path": output_file_path,
             },
         )
 
-        return file_path, rows_count
+        return output_file_path, rows_count
 
-    def _create_temp_file(self) -> tuple[int, str]:
-        """Create temporary file for ETL batch data.
+    def _create_temp_file(
+        self, prefix: str = "etl_batch_", suffix: str = ".jsonl"
+    ) -> tuple[int, str]:
+        """Create temporary file for ETL data.
 
-        Creates a temporary JSONL file in the configured temp directory.
-        Ensures the directory exists before creating the file.
+        Creates a temporary file in the configured temp directory with explicit
+        prefix and suffix for clear identification. Ensures the directory exists
+        before creating the file.
+
+        Args:
+            prefix: File prefix for explicit naming (default: "etl_batch_")
+            suffix: File suffix/extension (default: ".jsonl")
 
         Returns:
             Tuple of (file_descriptor, file_path) where file_descriptor can be
@@ -479,9 +518,7 @@ class EtlJob:
         """
         temp_dir = Path(self._config.etl.temp_dir)
         temp_dir.mkdir(parents=True, exist_ok=True)
-        fd, file_path = tempfile.mkstemp(
-            suffix=".jsonl", dir=temp_dir, prefix="etl_batch_"
-        )
+        fd, file_path = tempfile.mkstemp(suffix=suffix, dir=temp_dir, prefix=prefix)
         return fd, file_path
 
     @staticmethod

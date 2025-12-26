@@ -9,7 +9,8 @@ dependencies = [
   "pydantic>=2.0.0",
   "pydantic-settings>=2.0.0",
   "logging-objects-with-schema>=0.4.0",
-  "clickhouse-connect>=0.10.0"
+  "clickhouse-connect>=0.10.0",
+  "ijson>=3.2.0"
 ]
 
   [[project.authors]]
@@ -94,7 +95,8 @@ exclude_lines = [
   "raise NotImplementedError",
   "if 0:",
   "if __name__ == .__main__.:",
-  "@(abc\\.)?abstractmethod"
+  "@(abc\\.)?abstractmethod",
+  "pragma: no cover"
 ]
 show_missing = true
 skip_covered = false
