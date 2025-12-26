@@ -1,3 +1,9 @@
+## [3.1.0-rc.2](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.1.0-rc.1...v3.1.0-rc.2) (2025-12-26)
+
+### Features
+
+* Add error handling for running job failures in logging schema ([5784b78](https://github.com/disafronov/etl-prometheus2clickhouse/commit/5784b789d52b8f1203fcecf8ce2f101bc20c1f4c))
+
 ## [3.1.0-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.0.1...v3.1.0-rc.1) (2025-12-26)
 
 ### Features
