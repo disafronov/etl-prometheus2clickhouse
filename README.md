@@ -106,7 +106,7 @@ Metrics table:
 CREATE TABLE default.metrics (
     timestamp DateTime,
     name String CODEC(ZSTD(3)),
-    labels JSON CODEC(ZSTD(3)),
+    labels Nullable(JSON) CODEC(ZSTD(3)),
     value Float64
 ) ENGINE = ReplacingMergeTree()
 PARTITION BY toYYYYMMDD(timestamp)
