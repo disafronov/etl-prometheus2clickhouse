@@ -1,3 +1,9 @@
+## [3.0.0-rc.5](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.0.0-rc.4...v3.0.0-rc.5) (2025-12-26)
+
+### Bug Fixes
+
+* Correct window end calculation in ETL job to maintain consistent window size ([53925ee](https://github.com/disafronov/etl-prometheus2clickhouse/commit/53925eeb5b9fd4305ff632295bf4fa95abae18eb))
+
 ## [3.0.0-rc.4](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.0.0-rc.3...v3.0.0-rc.4) (2025-12-26)
 
 ### Features
