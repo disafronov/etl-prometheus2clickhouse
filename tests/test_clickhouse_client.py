@@ -1005,6 +1005,34 @@ def test_clickhouse_client_has_running_job_handles_query_error(
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_get_running_job_timestamps_without_final(
+    mock_get_client: Mock,
+) -> None:
+    """_get_running_job_timestamps() should work with use_final=False."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    # Mock query result with running job
+    mock_result = Mock()
+    mock_result.result_rows = [[1700000100]]  # timestamp_start exists
+    mock_client.query.return_value = mock_result
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    result = client._get_running_job_timestamps(use_final=False)
+
+    assert result == [1700000100]
+    mock_client.query.assert_called_once()
+    # Verify query does NOT use FINAL when use_final=False
+    query_call = mock_client.query.call_args[0][0]
+    assert "FINAL" not in query_call
+    assert "LEFT JOIN" in query_call
+    assert "timestamp_start IS NOT NULL" in query_call
+    assert "timestamp_end IS NULL" in query_call
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_try_mark_start_success(mock_get_client: Mock) -> None:
     """try_mark_start() should return True when start is marked successfully."""
     mock_client = Mock()
