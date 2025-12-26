@@ -231,6 +231,20 @@
             "type": "str",
             "source": "clickhouse_client.has_running_job_failed.table"
           }
+        },
+        "try_mark_start_failed": {
+          "error": {
+            "type": "str",
+            "source": "clickhouse_client.try_mark_start_failed.error"
+          },
+          "timestamp_start": {
+            "type": "int",
+            "source": "clickhouse_client.try_mark_start_failed.timestamp_start"
+          },
+          "table": {
+            "type": "str",
+            "source": "clickhouse_client.try_mark_start_failed.table"
+          }
         }
       },
       "etl_job": {
@@ -346,6 +360,12 @@
           "file_path": {
             "type": "str",
             "source": "etl_job.fetch_data_success.file_path"
+          }
+        },
+        "save_state_failed": {
+          "message": {
+            "type": "str",
+            "source": "etl_job.save_state_failed.message"
           }
         }
       }
