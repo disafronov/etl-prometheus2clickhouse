@@ -1,3 +1,7 @@
+# Changelog
+
+<!-- markdownlint-disable MD024 -->
+
 ## [4.0.0-rc.3](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.0.0-rc.2...v4.0.0-rc.3) (2025-12-26)
 
 ## [4.0.0-rc.2](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.0.0-rc.1...v4.0.0-rc.2) (2025-12-26)
@@ -6,7 +10,7 @@
 
 * Implement streaming ETL pipeline in ETL job ([916d901](https://github.com/disafronov/etl-prometheus2clickhouse/commit/916d901864a51363fae0b3c2826ec6ee97421e6d))
 
-## [3.1.0-rc.6](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.1.0-rc.5...v3.1.0-rc.6) (2025-12-26)
+## [4.0.0-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.1.0-rc.5...v4.0.0-rc.1) (2025-12-26)
 
 ### ⚠ BREAKING CHANGES
 
@@ -51,6 +55,7 @@ Signed-off-by: Dmitrii Safronov <zimniy@cyberbrain.cc>
 * new columns order
 
 Signed-off-by: Dmitrii Safronov <zimniy@cyberbrain.cc>
+
 * Update logging schema to version 3 and change data types for window start and end fields
 * Removed PushGatewayClient and related configurations, streamlining the ETL process. Timestamp parameters now use int instead of float.
 
