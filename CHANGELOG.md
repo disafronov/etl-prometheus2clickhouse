@@ -1,3 +1,46 @@
+## [1.1.0](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v1.0.0...v1.1.0) (2025-12-26)
+
+### ⚠ BREAKING CHANGES
+
+* new columns order
+
+Signed-off-by: Dmitrii Safronov <zimniy@cyberbrain.cc>
+* Update logging schema to version 3 and change data types for window start and end fields
+* Removed PushGatewayClient and related configurations, streamlining the ETL process. Timestamp parameters now use int instead of float.
+
+Signed-off-by: Dmitrii Safronov <zimniy@cyberbrain.cc>
+
+### Features
+
+* Add insert_from_file method to ClickHouseClient for efficient data insertion ([7952af4](https://github.com/disafronov/etl-prometheus2clickhouse/commit/7952af4100d37421b1c2329eece37b0c8ed86c0e))
+* Add integer validation for SQL insertion in ClickHouseClient ([d1706ea](https://github.com/disafronov/etl-prometheus2clickhouse/commit/d1706ea8e742259de425998d05e6506f8a23ffb1))
+* Add job management methods to ClickHouseClient ([5307c7a](https://github.com/disafronov/etl-prometheus2clickhouse/commit/5307c7a88cd8c8026d4ee14793d72b662a8551c4))
+* Add table name validation in ClickHouseClient ([ea7067d](https://github.com/disafronov/etl-prometheus2clickhouse/commit/ea7067d54036477d7294c8c8602ed11903c34286))
+* Add validation for batch window size and overlap in EtlConfig ([a0afb97](https://github.com/disafronov/etl-prometheus2clickhouse/commit/a0afb97ee05d3256b025a91d59771dd70a96f353))
+* Add warning for large files in insert_from_file() fallback ([bca936a](https://github.com/disafronov/etl-prometheus2clickhouse/commit/bca936a734fbdfb45725a2f344dfebfec446080f))
+* enhance ClickHouse table definitions with ZSTD compression ([a801a16](https://github.com/disafronov/etl-prometheus2clickhouse/commit/a801a16adcd898240866666df8fe90ed8bfc005b))
+* Enhance error handling and logging in PrometheusClient ([efe1174](https://github.com/disafronov/etl-prometheus2clickhouse/commit/efe1174da21de049bdd412604259781f80b9b9dc))
+* Enhance error handling in EtlJob for job start conditions ([f4c30e6](https://github.com/disafronov/etl-prometheus2clickhouse/commit/f4c30e6200f52c3382d1b9086c68aa774cef64b4))
+* Enhance ETL job and ClickHouseClient with improved file handling and logging ([51524f7](https://github.com/disafronov/etl-prometheus2clickhouse/commit/51524f7ab0580bff643ea48ea08833fc434b823a))
+* Enhance logging with formatted UTC timestamps ([9cccfbc](https://github.com/disafronov/etl-prometheus2clickhouse/commit/9cccfbce56bfe503e2568fd3251cd6cd6caf478e))
+* Extend logging schema to include new error states ([6d32431](https://github.com/disafronov/etl-prometheus2clickhouse/commit/6d32431e4b0d727bbac06f7e448b17600964eb8b))
+* Implement HTTP streaming for file insertion in ClickHouseClient ([9fb2783](https://github.com/disafronov/etl-prometheus2clickhouse/commit/9fb2783674ae01c7aec26194279d757ed19328b8))
+* Implement state management in ClickHouseClient and ETL job ([59063ff](https://github.com/disafronov/etl-prometheus2clickhouse/commit/59063ffca060b410783abc9a0544bb120c07562a))
+* Optimize file insertion handling in ClickHouseClient ([109a587](https://github.com/disafronov/etl-prometheus2clickhouse/commit/109a58793ebe9cf4730b704182bc29dbcefd15bc))
+* Update logging schema for ETL job error handling ([3a8beb8](https://github.com/disafronov/etl-prometheus2clickhouse/commit/3a8beb885b6bef9aeae01ed7ba380cb91e3582a0))
+* Update logging schema to version 3 and change data types for window start and end fields ([4bd849b](https://github.com/disafronov/etl-prometheus2clickhouse/commit/4bd849bd92d00d2704ef3733ff380ffa4e00dd95))
+
+### Bug Fixes
+
+* Correct window end calculation in ETL job to maintain consistent window size ([4b4ff0b](https://github.com/disafronov/etl-prometheus2clickhouse/commit/4b4ff0b483c802a09a47b2eea8974a48596d6aab))
+* Enhance error logging in ClickHouseClient and main application ([90c0f98](https://github.com/disafronov/etl-prometheus2clickhouse/commit/90c0f98d3a148273e41b832ab819eb2c3c5df77e))
+* Improve error handling and logging in ClickHouseClient's file insertion ([fd0e455](https://github.com/disafronov/etl-prometheus2clickhouse/commit/fd0e455c2c477736a667d078a67f85465e8fefb5))
+* Improve error logging in ClickHouseClient and EtlJob ([1d4cbb6](https://github.com/disafronov/etl-prometheus2clickhouse/commit/1d4cbb681c65c0662f30672af70d8cf1d6f19052))
+
+### Code Refactoring
+
+* Update ClickHouse ETL state handling and improve documentation ([05815b3](https://github.com/disafronov/etl-prometheus2clickhouse/commit/05815b3e95e65aa415715ad3e1a834ec53559611))
+
 ## [3.0.0-rc.5](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v3.0.0-rc.4...v3.0.0-rc.5) (2025-12-26)
 
 ### Bug Fixes
