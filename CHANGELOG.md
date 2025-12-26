@@ -1,3 +1,9 @@
+## [4.1.0-rc.3](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.1.0-rc.2...v4.1.0-rc.3) (2025-12-26)
+
+### Bug Fixes
+
+* Clarify actual window calculation in ETL job ([0cc939f](https://github.com/disafronov/etl-prometheus2clickhouse/commit/0cc939f80e039271f67c958a30732cbe9c6512b2))
+
 ## [4.1.0-rc.2](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.1.0-rc.1...v4.1.0-rc.2) (2025-12-26)
 
 ### Bug Fixes
