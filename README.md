@@ -1,6 +1,6 @@
 # etl-prometheus2clickhouse
 
-ETL job that reads metrics from Prometheus, writes them to ClickHouse in batches and uses ClickHouse to store job state.
+ETL job that reads metrics from Prometheus, writes them to ClickHouse and uses same ClickHouse to store job state.
 
 ## Overview
 
