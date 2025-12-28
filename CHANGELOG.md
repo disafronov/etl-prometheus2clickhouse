@@ -1,3 +1,9 @@
+## [4.2.0](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.1.0...v4.2.0) (2025-12-28)
+
+### Features
+
+* **logging:** Enhance logging configuration with ECS formatter ([14a69a8](https://github.com/disafronov/etl-prometheus2clickhouse/commit/14a69a86f5b307823c01c9665e313366fb973dac))
+
 ## [4.2.0-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.1.1...v4.2.0-rc.1) (2025-12-28)
 
 ### Features
