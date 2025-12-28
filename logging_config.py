@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-Logging configuration using SchemaLogger.
+Logging configuration using SchemaLogger and ECS formatter.
 
 This module configures a global logging setup for the application:
 - SchemaLogger is used as the base logger class.
+- ECS (Elastic Common Schema) formatter is used for structured JSON logging.
 - Non-error messages (DEBUG, INFO, WARNING) are sent to stdout.
 - Error messages (ERROR and above) are sent to stderr.
-All timestamps are formatted in UTC timezone.
+All timestamps are formatted in UTC timezone by ECS formatter.
 """
 
 from __future__ import annotations
@@ -17,32 +18,14 @@ import sys
 from datetime import datetime, timezone
 from functools import lru_cache
 
+import ecs_logging
 from logging_objects_with_schema import SchemaLogger
 
+# Configure SchemaLogger as the default logger class
 logging.setLoggerClass(SchemaLogger)
 
-
-class UTCFormatter(logging.Formatter):
-    """Formatter that formats timestamps in UTC with explicit +00:00 timezone.
-
-    Uses datetime.isoformat() for standard ISO 8601 format with +00:00 offset,
-    ensuring unambiguous UTC indication in logs.
-    """
-
-    def formatTime(self, record: logging.LogRecord, _datefmt: str | None = None) -> str:
-        """Format time in UTC with +00:00 suffix using datetime.isoformat().
-
-        This is the standard Python way to format UTC timestamps in ISO 8601 format.
-
-        Args:
-            record: Log record to format timestamp for
-            _datefmt: Unused parameter (required by base class signature)
-
-        Returns:
-            ISO 8601 formatted timestamp string with +00:00 timezone offset
-        """
-        dt = datetime.fromtimestamp(record.created, tz=timezone.utc)
-        return dt.isoformat(timespec="seconds")
+# Reuse single ECS formatter instance for all loggers
+_ecs_formatter = ecs_logging.StdlibFormatter()
 
 
 def _filter_non_error(record: logging.LogRecord) -> bool:
@@ -75,29 +58,26 @@ def _get_log_level() -> str:
 
 
 def _make_logger(name: str, level: str | int) -> logging.Logger:
-    """Create and configure a logger with stdout/stderr handlers.
+    """Create and configure a logger with stdout/stderr handlers and ECS formatter.
 
     Stdout handler:
         - Receives messages below ERROR level.
     Stderr handler:
         - Receives ERROR and above.
-    All timestamps are formatted in UTC timezone.
+    All logs are formatted as JSON using ECS (Elastic Common Schema) format.
+    Timestamps are automatically formatted in UTC by ECS formatter.
     """
     logger = logging.getLogger(name)
 
     if not _is_logger_configured(logger):
-        formatter = UTCFormatter(
-            fmt="%(asctime)s %(name)s %(levelname)s %(message)s",
-        )
-
         stdout_handler = logging.StreamHandler(sys.stdout)
         stdout_handler.setLevel(logging.DEBUG)
         stdout_handler.addFilter(_filter_non_error)
-        stdout_handler.setFormatter(formatter)
+        stdout_handler.setFormatter(_ecs_formatter)
 
         stderr_handler = logging.StreamHandler(sys.stderr)
         stderr_handler.setLevel(logging.ERROR)
-        stderr_handler.setFormatter(formatter)
+        stderr_handler.setFormatter(_ecs_formatter)
 
         logger.addHandler(stdout_handler)
         logger.addHandler(stderr_handler)
