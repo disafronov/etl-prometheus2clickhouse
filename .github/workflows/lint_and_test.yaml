@@ -9,32 +9,33 @@ name: Lint and test
 
 jobs:
   lint_and_test:
-    name: "Lint and test (Python ${{ matrix.python-version }})"
+    name: "Lint and test"
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    strategy:
-      matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Read Python version
+        id: python_version
+        run: echo "version=$(cat .python-version | tr -d '[:space:]')" >> $GITHUB_OUTPUT
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-          cache-suffix: ${{ matrix.python-version }}
+          cache-suffix: ${{ steps.python_version.outputs.version }}
 
       - name: Install dependencies
-        run: uv sync --python ${{ matrix.python-version }}
+        run: uv sync --python ${{ steps.python_version.outputs.version }}
         env:
-          UV_PYTHON: ${{ matrix.python-version }}
+          UV_PYTHON: ${{ steps.python_version.outputs.version }}
 
       - name: Run all checks
         run: make all
         env:
-          UV_PYTHON: ${{ matrix.python-version }}
+          UV_PYTHON: ${{ steps.python_version.outputs.version }}
 
       - name: Check if code was reformatted
         if: always()
