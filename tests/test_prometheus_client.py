@@ -191,3 +191,105 @@ def test_prometheus_client_query_range_to_file_write_error(
             step="300s",
             file_path=file_path,
         )
+
+
+@patch("prometheus_client.requests.get")
+@patch("prometheus_client.logger")
+def test_prometheus_client_execute_request_timeout(
+    mock_logger: Mock, mock_get: Mock
+) -> None:
+    """_execute_request() should log and re-raise Timeout exception."""
+    config = _make_prometheus_config()
+    client = PrometheusClient(config)
+
+    timeout_exc = requests.Timeout("Request timed out")
+    mock_get.side_effect = timeout_exc
+
+    with pytest.raises(requests.Timeout):
+        client._execute_request(
+            url="http://prom:9090/api/v1/query_range",
+            params={"query": "up"},
+            expr="up",
+            query_type="query_range",
+            extra_log_fields={"step": "300s"},
+        )
+
+    # Verify error was logged with correct fields
+    mock_logger.error.assert_called_once()
+    call_args = mock_logger.error.call_args
+    assert call_args[0][0] == "Prometheus query_range timeout"
+    assert "prometheus_client.query_range_timeout.error" in call_args[1]["extra"]
+    assert "prometheus_client.query_range_timeout.expression" in call_args[1]["extra"]
+    assert "prometheus_client.query_range_timeout.url" in call_args[1]["extra"]
+    assert "prometheus_client.query_range_timeout.timeout" in call_args[1]["extra"]
+    assert "step" in call_args[1]["extra"]
+
+
+@patch("prometheus_client.requests.get")
+@patch("prometheus_client.logger")
+def test_prometheus_client_execute_request_connection_error(
+    mock_logger: Mock, mock_get: Mock
+) -> None:
+    """_execute_request() should log and re-raise ConnectionError exception."""
+    config = _make_prometheus_config()
+    client = PrometheusClient(config)
+
+    connection_exc = requests.ConnectionError("Connection failed")
+    mock_get.side_effect = connection_exc
+
+    with pytest.raises(requests.ConnectionError):
+        client._execute_request(
+            url="http://prom:9090/api/v1/query_range",
+            params={"query": "up"},
+            expr="up",
+            query_type="query_range",
+        )
+
+    # Verify error was logged with correct fields
+    mock_logger.error.assert_called_once()
+    call_args = mock_logger.error.call_args
+    assert call_args[0][0] == "Prometheus query_range connection error"
+    assert (
+        "prometheus_client.query_range_connection_error.error" in call_args[1]["extra"]
+    )
+    assert (
+        "prometheus_client.query_range_connection_error.expression"
+        in call_args[1]["extra"]
+    )
+    assert "prometheus_client.query_range_connection_error.url" in call_args[1]["extra"]
+
+
+@patch("prometheus_client.requests.get")
+@patch("prometheus_client.logger")
+def test_prometheus_client_execute_request_request_exception(
+    mock_logger: Mock, mock_get: Mock
+) -> None:
+    """_execute_request() should log and re-raise RequestException exception."""
+    config = _make_prometheus_config()
+    client = PrometheusClient(config)
+
+    request_exc = requests.RequestException("Request failed")
+    mock_get.side_effect = request_exc
+
+    with pytest.raises(requests.RequestException):
+        client._execute_request(
+            url="http://prom:9090/api/v1/query_range",
+            params={"query": "up"},
+            expr="up",
+            query_type="query_range",
+        )
+
+    # Verify error was logged with correct fields
+    mock_logger.error.assert_called_once()
+    call_args = mock_logger.error.call_args
+    assert call_args[0][0] == "Prometheus query_range request failed"
+    assert "prometheus_client.query_range_request_failed.error" in call_args[1]["extra"]
+    assert (
+        "prometheus_client.query_range_request_failed.error_type"
+        in call_args[1]["extra"]
+    )
+    assert (
+        "prometheus_client.query_range_request_failed.expression"
+        in call_args[1]["extra"]
+    )
+    assert "prometheus_client.query_range_request_failed.url" in call_args[1]["extra"]
