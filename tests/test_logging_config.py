@@ -3,6 +3,7 @@ Tests for logging configuration.
 """
 
 import io
+import json
 import logging
 from datetime import datetime, timezone
 
@@ -10,12 +11,13 @@ from logging_config import getLogger
 
 
 def _parse_iso8601_utc(timestamp_str: str) -> datetime:
-    """Parse ISO 8601 timestamp with +00:00 timezone offset.
+    """Parse ISO 8601 timestamp with UTC timezone.
 
-    Uses datetime.fromisoformat() which supports +00:00 in all Python versions.
+    ECS formatter uses ISO 8601 format with 'Z' suffix for UTC.
+    Also supports +00:00 format for compatibility.
 
     Args:
-        timestamp_str: ISO 8601 formatted string with +00:00 timezone offset
+        timestamp_str: ISO 8601 formatted string (with Z or +00:00)
 
     Returns:
         datetime object with UTC timezone
@@ -23,6 +25,10 @@ def _parse_iso8601_utc(timestamp_str: str) -> datetime:
     Raises:
         AssertionError: If timestamp does not conform to ISO 8601 format
     """
+    # ECS formatter uses 'Z' suffix for UTC, convert to +00:00 for fromisoformat
+    if timestamp_str.endswith("Z"):
+        timestamp_str = timestamp_str[:-1] + "+00:00"
+
     try:
         parsed_time = datetime.fromisoformat(timestamp_str)
     except ValueError as exc:
@@ -33,14 +39,14 @@ def _parse_iso8601_utc(timestamp_str: str) -> datetime:
     # Verify it's UTC timezone
     if parsed_time.tzinfo != timezone.utc:
         raise AssertionError(
-            f"Timestamp should be in UTC timezone (+00:00), got: {parsed_time.tzinfo}"
+            f"Timestamp should be in UTC timezone, got: {parsed_time.tzinfo}"
         )
 
     return parsed_time
 
 
-def test_logging_format_utc_with_timezone() -> None:
-    """Logger should format timestamps in UTC with ISO 8601 +00:00 timezone offset."""
+def test_logging_format_ecs_json() -> None:
+    """Logger should output ECS-formatted JSON logs with UTC timestamps."""
     logger = getLogger("test_logging_format")
 
     # Create a string buffer to capture output
@@ -63,18 +69,19 @@ def test_logging_format_utc_with_timezone() -> None:
         logger.info("Test message")
 
         # Get the output
-        output = stream.getvalue()
+        output = stream.getvalue().strip()
 
-        # Extract timestamp from log line
-        # Format: "YYYY-MM-DDTHH:MM:SS+00:00 name level message"
-        parts = output.split()
-        assert (
-            len(parts) >= 3
-        ), f"Expected at least 3 parts in log output, got: {output}"
+        # ECS formatter outputs JSON, parse it
+        log_data = json.loads(output)
 
-        timestamp_str = parts[0]
+        # Verify ECS structure
+        assert "@timestamp" in log_data, "ECS log should have @timestamp field"
+        assert "log.level" in log_data, "ECS log should have log.level field"
+        assert "message" in log_data, "ECS log should have message field"
+        assert log_data["message"] == "Test message"
 
-        # Validate and parse ISO 8601 format with +00:00 timezone offset
+        # Extract and validate timestamp
+        timestamp_str = log_data["@timestamp"]
         parsed_time = _parse_iso8601_utc(timestamp_str)
 
         # Verify it's close to current UTC time (within reasonable bounds)
@@ -88,7 +95,7 @@ def test_logging_format_utc_with_timezone() -> None:
 
 
 def test_logging_uses_utc_time() -> None:
-    """Logger should use UTC time (not local time)."""
+    """Logger should use UTC time (not local time) in ECS format."""
     logger = getLogger("test_utc_time")
 
     # Create a string buffer to capture output
@@ -110,17 +117,13 @@ def test_logging_uses_utc_time() -> None:
         logger.info("Test UTC time")
 
         # Get the output
-        output = stream.getvalue()
+        output = stream.getvalue().strip()
 
-        # Extract timestamp from log line
-        parts = output.split()
-        assert (
-            len(parts) >= 3
-        ), f"Expected at least 3 parts in log output, got: {output}"
+        # ECS formatter outputs JSON, parse it
+        log_data = json.loads(output)
 
-        timestamp_str = parts[0]
-
-        # Validate and parse ISO 8601 format with +00:00 timezone offset
+        # Extract timestamp from ECS format
+        timestamp_str = log_data["@timestamp"]
         log_time_utc = _parse_iso8601_utc(timestamp_str)
 
         # Current UTC time
