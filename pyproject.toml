@@ -3,7 +3,7 @@ name = "etl-prometheus2clickhouse"
 version = "4.1.0"
 description = "ETL job for transferring metrics from Prometheus to ClickHouse using ClickHouse for state storage."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 dependencies = [
   "requests>=2.31.0",
   "pydantic>=2.0.0",
