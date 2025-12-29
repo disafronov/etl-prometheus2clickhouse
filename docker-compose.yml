@@ -162,10 +162,9 @@ configs:
               value String
           ) CODEC(ZSTD(3)),
           value Float64
-      ) ENGINE = ReplacingMergeTree()
+      )       ENGINE = ReplacingMergeTree()
       PARTITION BY toYYYYMMDD(timestamp)
-      ORDER BY (timestamp, name, arrayStringConcat(arraySort(labels.key), ','))
-      SETTINGS allow_nullable_key = 1;
+      ORDER BY (timestamp, name, arrayStringConcat(arraySort(labels.key), ','));
 
   clickhouse_init_sql_etl:
     content: |
