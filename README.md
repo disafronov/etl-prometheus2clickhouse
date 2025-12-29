@@ -104,6 +104,7 @@ Metrics table:
 
 ```sql
 CREATE TABLE default.metrics (
+    id UUID MATERIALIZED generateUUIDv4(),
     timestamp DateTime,
     name String CODEC(ZSTD(3)),
     labels Nested(
@@ -121,10 +122,18 @@ performance. Without partitioning, all data goes into a single partition, causin
 slow merges as data volume grows. With daily partitioning, merges only affect
 small date ranges, significantly improving performance.
 
+**Note on `id` column:** The `id` field is a MATERIALIZED column that is always
+auto-generated and cannot be overridden during insert. It is stored on disk and
+can be used in WHERE clauses, JOINs, and ORDER BY for efficient queries. By
+default, MATERIALIZED columns are not included in `SELECT *` results. To include
+`id` in results, either explicitly specify it (`SELECT id, * FROM ...`) or use
+the setting `SET asterisk_include_materialized_columns=1`.
+
 ETL state table:
 
 ```sql
 CREATE TABLE default.etl (
+    id UUID MATERIALIZED generateUUIDv4(),
     timestamp_start Nullable(Int64) CODEC(ZSTD(3)),
     timestamp_end Nullable(Int64) CODEC(ZSTD(3)),
     timestamp_progress Nullable(Int64) CODEC(ZSTD(3)),
@@ -134,6 +143,9 @@ CREATE TABLE default.etl (
 ORDER BY (timestamp_start)
 SETTINGS allow_nullable_key = 1;
 ```
+
+**Note on `id` column:** Same as in metrics table - MATERIALIZED column that is
+always auto-generated and cannot be overridden.
 
 ## Logging
 
