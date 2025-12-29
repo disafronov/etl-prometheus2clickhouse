@@ -102,7 +102,8 @@ class ClickHouseClient:
         Args:
             file_path: Path to JSONL file with data in JSONEachRow format.
                 Each line must be a JSON object with keys: timestamp, name,
-                labels (JSON object), and value.
+                labels.key (array of strings), labels.value (array of strings),
+                and value.
 
         Raises:
             FileNotFoundError: If file doesn't exist

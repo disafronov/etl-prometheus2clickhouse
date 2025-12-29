@@ -157,11 +157,14 @@ configs:
       CREATE TABLE IF NOT EXISTS default.metrics (
           timestamp DateTime,
           name String CODEC(ZSTD(3)),
-          labels Nullable(JSON) CODEC(ZSTD(3)),
+          labels Nested(
+              key String,
+              value String
+          ) CODEC(ZSTD(3)),
           value Float64
       ) ENGINE = ReplacingMergeTree()
       PARTITION BY toYYYYMMDD(timestamp)
-      ORDER BY (timestamp, name, toString(labels))
+      ORDER BY (timestamp, name, arrayStringConcat(arraySort(labels.key), ','))
       SETTINGS allow_nullable_key = 1;
 
   clickhouse_init_sql_etl:
