@@ -103,7 +103,8 @@ class ClickHouseClient:
             file_path: Path to JSONL file with data in JSONEachRow format.
                 Each line must be a JSON object with keys: timestamp, name,
                 labels.key (array of strings), labels.value (array of strings),
-                and value.
+                and value. The id field is MATERIALIZED and always auto-generated.
+                If 'id' is present in JSON, it will be ignored or cause an error.
 
         Raises:
             FileNotFoundError: If file doesn't exist
@@ -136,6 +137,9 @@ class ClickHouseClient:
         # without loading entire file into memory
         try:
             # Construct query parameter for INSERT statement
+            # id field is MATERIALIZED, so it's always auto-generated and
+            # cannot be overridden. If 'id' is present in JSON, it will be
+            # ignored or cause an error.
             query = f"INSERT INTO {self._table_metrics} FORMAT JSONEachRow"
 
             # Stream file directly to ClickHouse HTTP interface
@@ -299,8 +303,10 @@ class ClickHouseClient:
            they will be merged into single record
 
         All fields are optional - only provided fields are saved.
-        Fields are saved in table order: timestamp_start, timestamp_end,
-        timestamp_progress, batch_window_seconds, batch_rows.
+        The id field is MATERIALIZED and always auto-generated, cannot be
+        provided. Fields are saved in table order: id (auto-generated),
+        timestamp_start, timestamp_end, timestamp_progress,
+        batch_window_seconds, batch_rows.
 
         Args:
             timestamp_progress: Progress timestamp (Unix timestamp in seconds, int)
