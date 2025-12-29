@@ -1,3 +1,15 @@
+## [4.2.1-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.2.0...v4.2.1-rc.1) (2025-12-29)
+
+### ⚠ BREAKING CHANGES
+
+* labels format
+
+Signed-off-by: Dmitrii Safronov <zimniy@cyberbrain.cc>
+
+### Code Refactoring
+
+* Update labels structure in ClickHouse schema and ETL job ([5e3e487](https://github.com/disafronov/etl-prometheus2clickhouse/commit/5e3e4873aed30b528249505ba8fa203a29c9bb36))
+
 ## [4.2.0](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.1.0...v4.2.0) (2025-12-28)
 
 ### Features
