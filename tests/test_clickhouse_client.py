@@ -255,8 +255,10 @@ def test_clickhouse_client_insert_from_file_success(
     # Create test file
     file_path = tmp_path / "test.jsonl"
     file_path.write_text(
-        '{"timestamp": 1234567890, "name": "up", "labels": "{}", "value": 1.0}\n'
-        '{"timestamp": 1234567900, "name": "up", "labels": "{}", "value": 1.0}\n'
+        '{"timestamp": 1234567890, "name": "up", '
+        '"labels.key": [], "labels.value": [], "value": 1.0}\n'
+        '{"timestamp": 1234567900, "name": "up", '
+        '"labels.key": [], "labels.value": [], "value": 1.0}\n'
     )
 
     client.insert_from_file(str(file_path))
