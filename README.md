@@ -10,7 +10,7 @@ The job:
 - writes rows into a single ClickHouse table:
   - `timestamp` (DateTime) – metric timestamp;
   - `name` (String) – metric name;
-  - `labels` (JSON) – metric labels as JSON object;
+  - `labels` (Nested(key, value)) – metric labels as Nested structure with key and value arrays;
   - `value` (Float64) – metric value;
 - stores job state in ClickHouse ETL table:
   - `timestamp_progress` – current processing progress timestamp;
@@ -106,11 +106,14 @@ Metrics table:
 CREATE TABLE default.metrics (
     timestamp DateTime,
     name String CODEC(ZSTD(3)),
-    labels Nullable(JSON) CODEC(ZSTD(3)),
+    labels Nested(
+        key String,
+        value String
+    ) CODEC(ZSTD(3)),
     value Float64
 ) ENGINE = ReplacingMergeTree()
 PARTITION BY toYYYYMMDD(timestamp)
-ORDER BY (timestamp, name, toString(labels))
+ORDER BY (timestamp, name, arrayStringConcat(arraySort(labels.key), ','))
 SETTINGS allow_nullable_key = 1;
 ```
 

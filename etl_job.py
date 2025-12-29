@@ -442,19 +442,28 @@ class EtlJob:
                             )
                             continue
 
-                        # Prepare labels with sorted keys for consistent ORDER BY
-                        # comparison. ClickHouse JSON type expects JSON object,
-                        # not string. toString(labels) in ORDER BY will use
-                        # consistent string representation for deduplication.
+                        # Prepare labels as Nested structure (arrays of keys and values)
+                        # ClickHouse Nested(key, value) expects two arrays:
+                        # labels.key = ['key1', 'key2', ...]
+                        # labels.value = ['value1', 'value2', ...]
+                        # Sort keys for consistent ORDER BY comparison.
+                        # ORDER BY uses arrayStringConcat(arraySort(labels.key), ',')
+                        # so sorting here ensures consistency with ClickHouse
+                        # comparison.
                         labels_sorted = dict(sorted(labels.items()))
 
+                        # Convert to Nested format: separate arrays for keys and values
+                        labels_keys = list(labels_sorted.keys())
+                        labels_values = list(labels_sorted.values())
+
                         # Write row as JSON line (JSONEachRow format for ClickHouse)
-                        # sort_keys=True ensures consistent string representation
-                        # for ORDER BY comparison
+                        # Nested structure is represented as object with .key and
+                        # .value arrays
                         row = {
                             "timestamp": ts,
                             "name": metric_name,
-                            "labels": labels_sorted,
+                            "labels.key": labels_keys,
+                            "labels.value": labels_values,
                             "value": value,
                         }
                         output_f.write(
