@@ -134,9 +134,9 @@ ETL state table:
 ```sql
 CREATE TABLE default.etl (
     id UUID MATERIALIZED generateUUIDv4(),
-    timestamp_start Nullable(Int64) CODEC(ZSTD(3)),
-    timestamp_end Nullable(Int64) CODEC(ZSTD(3)),
-    timestamp_progress Nullable(Int64) CODEC(ZSTD(3)),
+    timestamp_start Nullable(DateTime),
+    timestamp_end Nullable(DateTime),
+    timestamp_progress Nullable(DateTime),
     batch_window_seconds Nullable(Int64) CODEC(ZSTD(3)),
     batch_rows Nullable(Int64) CODEC(ZSTD(3))
 ) ENGINE = ReplacingMergeTree()
@@ -170,14 +170,14 @@ This marks the previous job as completed and allows the new job to start:
 
 ```bash
 TIMESTAMP_END=$(date +%s)
-clickhouse-client --query "INSERT INTO default.etl (timestamp_end) VALUES ($TIMESTAMP_END)"
+clickhouse-client --query "INSERT INTO default.etl (timestamp_end) VALUES (toDateTime($TIMESTAMP_END))"
 ```
 
 Or using HTTP interface:
 
 ```bash
 TIMESTAMP_END=$(date +%s)
-curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_end)+VALUES+($TIMESTAMP_END)"
+curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_end)+VALUES+(toDateTime($TIMESTAMP_END))"
 ```
 
 **Note:** After setting `timestamp_end`, the job will be able to pass the start check on the next run. However, if this was the first run and the job never completed successfully, `timestamp_progress` may be missing. In that case, the job will fail with "TimestampProgress not found in ClickHouse" error. You will need to set `timestamp_progress` manually as described in the "TimestampProgress Not Found in ClickHouse" section below.
@@ -242,13 +242,14 @@ Set all three fields in ClickHouse (using dummy values for start and end):
 
 ```bash
 # Use timestamp_progress as base, set start to same value, end to start + 1
-clickhouse-client --query "INSERT INTO default.etl (timestamp_start, timestamp_end, timestamp_progress) VALUES ($TIMESTAMP_PROGRESS, $((TIMESTAMP_PROGRESS + 1)), $TIMESTAMP_PROGRESS)"
+# Convert Unix timestamps to DateTime using toDateTime() function
+clickhouse-client --query "INSERT INTO default.etl (timestamp_start, timestamp_end, timestamp_progress) VALUES (toDateTime($TIMESTAMP_PROGRESS), toDateTime($((TIMESTAMP_PROGRESS + 1))), toDateTime($TIMESTAMP_PROGRESS))"
 ```
 
 Or using HTTP interface:
 
 ```bash
-curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_start,timestamp_end,timestamp_progress)+VALUES+($TIMESTAMP_PROGRESS,$((TIMESTAMP_PROGRESS+1)),$TIMESTAMP_PROGRESS)"
+curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_start,timestamp_end,timestamp_progress)+VALUES+(toDateTime($TIMESTAMP_PROGRESS),toDateTime($((TIMESTAMP_PROGRESS+1))),toDateTime($TIMESTAMP_PROGRESS))"
 ```
 
 **Note:** After setting all three fields, the job will be able to start on the next run. The job will process data starting from `timestamp_progress` value. The `timestamp_start` and `timestamp_end` values are dummy values for initialization and will be replaced with real values on the first successful run.
