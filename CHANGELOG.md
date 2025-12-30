@@ -1,3 +1,9 @@
+## [5.0.0-rc.2](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0-rc.1...v5.0.0-rc.2) (2025-12-30)
+
+### Features
+
+* Add Unix timestamp conversion for ClickHouse DateTime values ([5b10ccc](https://github.com/disafronov/etl-prometheus2clickhouse/commit/5b10ccc437472d54ebd1c90074024d940fcfef66))
+
 ## [4.2.1-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.2.0...v4.2.1-rc.1) (2025-12-29)
 
 ### ⚠ BREAKING CHANGES
