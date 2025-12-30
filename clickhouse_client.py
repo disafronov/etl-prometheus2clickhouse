@@ -6,6 +6,7 @@ ClickHouse client wrapper for batch inserts.
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 import clickhouse_connect
@@ -91,6 +92,41 @@ class ClickHouseClient:
                 },
             )
             raise
+
+    def _to_unix_timestamp(self, value: datetime | int | None) -> int | None:
+        """Convert ClickHouse DateTime value to Unix timestamp (int).
+
+        ClickHouse returns datetime objects for DateTime columns. This method
+        converts them to Unix timestamps (int) for consistency with API.
+
+        Important: clickhouse-connect returns naive datetime objects (without
+        timezone info). In Python, calling .timestamp() on a naive datetime
+        interprets it as local system time, not UTC. However, ClickHouse stores
+        DateTime values as UTC internally. This method explicitly converts
+        naive datetime to UTC-aware datetime before calling .timestamp() to
+        ensure correct conversion.
+
+        Args:
+            value: datetime object, int, or None from ClickHouse
+
+        Returns:
+            Unix timestamp as int, or None if input is None
+        """
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            # Ensure datetime is in UTC before converting to timestamp
+            # clickhouse-connect may return datetime in local timezone
+            if value.tzinfo is None:
+                # Naive datetime - assume UTC (ClickHouse DateTime is
+                # timezone-agnostic, stored as UTC)
+                value = value.replace(tzinfo=timezone.utc)
+            elif value.tzinfo != timezone.utc:
+                # Convert to UTC
+                value = value.astimezone(timezone.utc)
+            return int(value.timestamp())
+        # Fallback for int (shouldn't happen with DateTime, but just in case)
+        return int(value)
 
     def insert_from_file(self, file_path: str) -> None:
         """Insert rows from JSONL file into configured table.
@@ -224,9 +260,9 @@ class ClickHouseClient:
 
             row = result.result_rows[0]
             return {
-                "timestamp_start": int(row[0]) if row[0] is not None else None,
-                "timestamp_end": int(row[1]) if row[1] is not None else None,
-                "timestamp_progress": int(row[2]) if row[2] is not None else None,
+                "timestamp_start": self._to_unix_timestamp(row[0]),
+                "timestamp_end": self._to_unix_timestamp(row[1]),
+                "timestamp_progress": self._to_unix_timestamp(row[2]),
                 "batch_window_seconds": int(row[3]) if row[3] is not None else None,
                 "batch_rows": int(row[4]) if row[4] is not None else None,
             }
@@ -416,7 +452,13 @@ class ClickHouseClient:
         """  # nosec B608
 
         result = self._client.query(query)
-        return [int(row[0]) for row in result.result_rows]
+        # Filter out None values (shouldn't happen
+        # due to WHERE timestamp_start IS NOT NULL)
+        return [
+            ts
+            for row in result.result_rows
+            if (ts := self._to_unix_timestamp(row[0])) is not None
+        ]
 
     def has_running_job(self) -> bool:
         """Check if there is a running job in the ETL table.
@@ -457,6 +499,11 @@ class ClickHouseClient:
         - If there's both open and closed records → job is completed, allow start
         - If there's no open record → no job running, allow start
 
+        Note: Uses toDateTime() to explicitly convert Unix timestamp (int) to
+        DateTime type in ClickHouse. After insertion, verifies success by
+        checking running jobs without FINAL (new inserts are visible immediately
+        before merge in ReplacingMergeTree).
+
         Args:
             timestamp_start: Unix timestamp when job started (int, seconds since epoch)
 
@@ -481,7 +528,7 @@ class ClickHouseClient:
             # 3. We need to check both open and closed records separately
             query = f"""
                 INSERT INTO {self._table_etl} (timestamp_start)
-                SELECT {timestamp_start}
+                SELECT toDateTime({timestamp_start})
                 WHERE (
                     SELECT COUNT(*)
                     FROM {self._table_etl} AS open
@@ -498,7 +545,8 @@ class ClickHouseClient:
             self._client.query(query)
 
             # Verify insertion succeeded by checking if we're the only running job
-            running_timestamps = self._get_running_job_timestamps(use_final=True)
+            # Don't use FINAL here - new inserts are visible immediately (before merge)
+            running_timestamps = self._get_running_job_timestamps(use_final=False)
 
             # Check if we're the only running job and it's our timestamp_start
             if (
