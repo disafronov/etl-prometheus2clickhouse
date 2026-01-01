@@ -1,3 +1,5 @@
+## [5.1.1-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.0...v5.1.1-rc.1) (2026-01-01)
+
 ## [5.1.0](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0...v5.1.0) (2026-01-01)
 
 ### Features
