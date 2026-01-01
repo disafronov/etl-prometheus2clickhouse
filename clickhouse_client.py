@@ -373,21 +373,33 @@ class ClickHouseClient:
 
             # Save fields in table order:
             # timestamp_start, timestamp_end, timestamp_progress, ...
+            # Convert Unix timestamps to datetime objects for DateTime columns.
+            # clickhouse-connect requires datetime objects for DateTime columns,
+            # not raw Unix timestamps (int). Passing int directly may cause
+            # incorrect interpretation (e.g., as days since epoch instead of seconds).
             if timestamp_start is not None:
                 columns.append("timestamp_start")
-                values.append(timestamp_start)
+                values.append(datetime.fromtimestamp(timestamp_start, tz=timezone.utc))
             if timestamp_end is not None:
                 columns.append("timestamp_end")
-                values.append(timestamp_end)
+                values.append(datetime.fromtimestamp(timestamp_end, tz=timezone.utc))
             if timestamp_progress is not None:
                 columns.append("timestamp_progress")
-                values.append(timestamp_progress)
+                values.append(
+                    datetime.fromtimestamp(timestamp_progress, tz=timezone.utc)
+                )
             if batch_window_seconds is not None:
                 columns.append("batch_window_seconds")
-                values.append(batch_window_seconds)
+                # Type ignore: values list contains mixed types (datetime for
+                # timestamps, int for batch fields), which is correct for
+                # clickhouse-connect insert
+                values.append(batch_window_seconds)  # type: ignore[arg-type]
             if batch_rows is not None:
                 columns.append("batch_rows")
-                values.append(batch_rows)
+                # Type ignore: values list contains mixed types (datetime for
+                # timestamps, int for batch fields), which is correct for
+                # clickhouse-connect insert
+                values.append(batch_rows)  # type: ignore[arg-type]
 
             if not columns:
                 return  # Nothing to insert
