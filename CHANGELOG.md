@@ -1,3 +1,12 @@
+## [5.0.0-rc.4](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0-rc.3...v5.0.0-rc.4) (2026-01-01)
+
+### Features
+
+* Add logging for transformed file details in ETL job ([d9be8d0](https://github.com/disafronov/etl-prometheus2clickhouse/commit/d9be8d0bae9dae8bc5b30938c0ad393bd8b4094a))
+* Enhance ETL job data fetching and logging ([96e93f1](https://github.com/disafronov/etl-prometheus2clickhouse/commit/96e93f1fb29b4b4115f6a40fcfd02b28f9c5a32d))
+* Enhance ETL job logging with additional output details ([799b759](https://github.com/disafronov/etl-prometheus2clickhouse/commit/799b75914722174db8a07ce8f95e2b3645bd805c))
+* Enhance ETL job logging with Prometheus response details ([91ff393](https://github.com/disafronov/etl-prometheus2clickhouse/commit/91ff393017f31495d296d307eb70b45c9fc6c11c))
+
 ## [5.0.0-rc.3](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0-rc.2...v5.0.0-rc.3) (2026-01-01)
 
 ### Bug Fixes
