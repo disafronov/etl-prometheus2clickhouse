@@ -72,6 +72,12 @@ class EtlJob:
         4. Fetches and writes data for current window
         5. Updates progress and end timestamp only after successful write
 
+        Progress is updated only after successful data write to ensure idempotency:
+        if state update fails after successful write, the job will reprocess the
+        same window on the next run (data is already in ClickHouse, so duplicates
+        are handled by ReplacingMergeTree). This prevents data loss while allowing
+        safe retries.
+
         Raises:
             RuntimeError: If job cannot start (previous job running or error
                 checking state).
@@ -213,8 +219,12 @@ class EtlJob:
         - If found, previous job is still running, block start
         - If not found, allow start
 
+        Returns False on errors (fail-safe approach): if we cannot verify
+        that no job is running, it's safer to block start than risk concurrent
+        execution which could cause data corruption or duplicate processing.
+
         Returns:
-            True if job can start, False otherwise
+            True if job can start, False otherwise (including on errors)
         """
         try:
             if self._ch.has_running_job():
@@ -246,6 +256,11 @@ class EtlJob:
 
         Uses INSERT with subquery to atomically check condition and insert.
         Only one job can successfully mark start at a time.
+
+        Atomicity is critical here to prevent race conditions when multiple
+        job instances try to start simultaneously. Without atomic check-and-insert,
+        two jobs could both see "no running job" and both start, causing
+        concurrent execution and potential data corruption.
 
         Args:
             timestamp_start: Unix timestamp when job started (int, seconds since epoch)
@@ -822,8 +837,12 @@ class EtlJob:
         Formats float value ensuring no scientific notation is used.
         Handles special values (NaN, Inf, -Inf) correctly for ClickHouse.
         Uses general format first, falls back to fixed format if scientific
-        notation would be used. This ensures ClickHouse can parse the value
-        correctly in TabSeparated format.
+        notation would be used.
+
+        Scientific notation (e.g., "1.23e-4") is avoided because ClickHouse
+        TabSeparated format parser may not correctly parse scientific notation
+        in all cases, especially for very small or very large numbers. Using
+        fixed-point notation ensures reliable parsing and data integrity.
 
         Args:
             value: Float value to format (may be NaN, Inf, or -Inf)
