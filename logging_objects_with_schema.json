@@ -289,6 +289,10 @@
             "type": "str",
             "source": "etl_job.invalid_value_pair.name"
           },
+          "labels": {
+            "type": "str",
+            "source": "etl_job.invalid_value_pair.labels"
+          },
           "value_pair": {
             "type": "str",
             "source": "etl_job.invalid_value_pair.value_pair"
