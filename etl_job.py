@@ -539,15 +539,16 @@ class EtlJob:
         Returns:
             Tuple of (rows_count, series_count, skipped_count) where rows_count
             is number of rows written, series_count is number of series processed,
-            and skipped_count is number of value pairs skipped due to invalid
-            values (NaN, Inf, -Inf, or non-numeric strings)
+            and skipped_count is number of value pairs skipped due to format errors
+            (non-numeric strings that cannot be parsed). All valid Prometheus values,
+            including NaN and Inf, are preserved.
 
         Raises:
             Exception: If JSON parsing fails or data format is invalid
         """
         rows_count = 0
         series_count = 0
-        skipped_count = 0  # Track skipped value pairs (NaN, Inf, invalid)
+        skipped_count = 0  # Track skipped value pairs (format errors only)
 
         # Current series state (reset for each series)
         current_metric: dict[str, str] = {}
@@ -644,7 +645,9 @@ class EtlJob:
                     elif event == "string":
                         # Value (index 1) as string - Prometheus may return values
                         # as strings. This happens when value is "NaN", "Inf",
-                        # "-Inf", or numeric string
+                        # "-Inf", or numeric string. All values from Prometheus
+                        # are preserved, including NaN and Inf, as they represent
+                        # valid metric states (undefined or infinite values).
                         # Type narrowing: when event is "string", value is str
                         # nosec B101: assert for type narrowing, not runtime validation
                         assert isinstance(
@@ -652,18 +655,18 @@ class EtlJob:
                         ), "string event must have str value"  # noqa: E501  # nosec B101
                         try:
                             float_value = float(value)
-                            # Check for special float values that should be skipped
-                            # (NaN, Inf, -Inf are not valid metric values)
-                            if math.isnan(float_value) or math.isinf(float_value):
-                                # Invalid value (NaN, Inf, -Inf), skip this pair
-                                skipped_count += 1
-                                current_value_pair = []
-                                value_pair_index = 0
-                            else:
-                                current_value_pair.append(float_value)
-                                value_pair_index += 1
+                            # Save all values from Prometheus, including NaN and Inf.
+                            # These are valid metric states in Prometheus:
+                            # - NaN: metric is undefined at this timestamp
+                            # - Inf/-Inf: metric value is infinite
+                            #   (e.g., division by zero)
+                            current_value_pair.append(float_value)
+                            value_pair_index += 1
                         except (TypeError, ValueError):
-                            # Invalid value (non-numeric string), skip this pair
+                            # Invalid value (non-numeric string that cannot be parsed).
+                            # This is a format error, not a valid Prometheus value.
+                            # Prometheus API should only return numbers or special
+                            # strings like "NaN", "Inf", "-Inf", or numeric strings.
                             skipped_count += 1
                             current_value_pair = []
                             value_pair_index = 0
@@ -783,16 +786,25 @@ class EtlJob:
         """Format float without scientific notation.
 
         Formats float value ensuring no scientific notation is used.
+        Handles special values (NaN, Inf, -Inf) correctly for ClickHouse.
         Uses general format first, falls back to fixed format if scientific
         notation would be used. This ensures ClickHouse can parse the value
         correctly in TabSeparated format.
 
         Args:
-            value: Float value to format
+            value: Float value to format (may be NaN, Inf, or -Inf)
 
         Returns:
-            Formatted string without scientific notation
+            Formatted string without scientific notation. Special values are
+            formatted as "nan", "inf", "-inf" (ClickHouse-compatible format).
         """
+        # Handle special float values (NaN, Inf, -Inf)
+        # ClickHouse expects these as lowercase strings in TabSeparated format
+        if math.isnan(value):
+            return "nan"
+        if math.isinf(value):
+            return "inf" if value > 0 else "-inf"
+
         # Try general format first (handles most cases efficiently)
         formatted = f"{value:.15g}"
         if "e" in formatted.lower():
