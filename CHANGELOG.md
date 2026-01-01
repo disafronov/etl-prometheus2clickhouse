@@ -1,3 +1,9 @@
+## [5.0.0-rc.6](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0-rc.5...v5.0.0-rc.6) (2026-01-01)
+
+### Features
+
+* Add minimum window start timestamp configuration and clamping logic ([7fd1a37](https://github.com/disafronov/etl-prometheus2clickhouse/commit/7fd1a37682352400b3399898d880a85dc3e0e88c))
+
 ## [5.0.0-rc.5](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0-rc.4...v5.0.0-rc.5) (2026-01-01)
 
 ### Features
