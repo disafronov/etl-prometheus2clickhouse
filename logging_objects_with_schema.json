@@ -418,6 +418,20 @@
           "rows_count": {
             "type": "int",
             "source": "etl_job.transformation_complete.rows_count"
+          },
+          "prom_response_filename": {
+            "type": "str",
+            "source": "etl_job.transformation_complete.prom_response_filename"
+          }
+        },
+        "clickhouse_write_success": {
+          "file_path": {
+            "type": "str",
+            "source": "etl_job.clickhouse_write_success.file_path"
+          },
+          "rows_count": {
+            "type": "int",
+            "source": "etl_job.clickhouse_write_success.rows_count"
           }
         },
         "save_state_failed": {
