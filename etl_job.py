@@ -138,8 +138,11 @@ class EtlJob:
 
         # Calculate new progress, but never exceed current time to avoid going
         # into the future where Prometheus has no data yet
+        # Progress should be set to window_end to ensure proper overlap behavior:
+        # with overlap, next window will start at (window_end - overlap), creating
+        # overlap between consecutive windows
         current_time = int(time.time())
-        expected_progress = progress + self._config.etl.batch_window_size_seconds
+        expected_progress = window_end  # progress - overlap + window_size
         new_progress = min(expected_progress, current_time)
         # actual_window is the size of data we actually processed
         # We requested from window_start to window_end, but Prometheus returns
@@ -664,7 +667,8 @@ class EtlJob:
         Args:
             timestamp_start: Job start timestamp (same as initial start record)
             timestamp_end: Job completion timestamp
-            timestamp_progress: New progress timestamp (old + window_size)
+            timestamp_progress: New progress timestamp (window_end, which is
+                progress - overlap + window_size, ensuring proper overlap behavior)
             window_seconds: Size of processed window (for monitoring)
             rows_count: Number of rows processed (for monitoring)
 
