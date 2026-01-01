@@ -8,7 +8,7 @@ The job:
 
 - reads all metrics from Prometheus using `query_range` (always exports all metrics);
 - writes rows into a single ClickHouse table:
-  - `timestamp` (DateTime) – metric timestamp;
+  - `timestamp` (DateTime64(6, 'UTC')) – metric timestamp with microseconds precision;
   - `name` (String) – metric name;
   - `labels` (Nested(key, value)) – metric labels as Nested structure with key and value arrays;
   - `value` (Float64) – metric value;
@@ -105,7 +105,7 @@ Metrics table:
 ```sql
 CREATE TABLE default.metrics (
     id UUID MATERIALIZED generateUUIDv4(),
-    timestamp DateTime,
+    timestamp DateTime64(6, 'UTC'),
     name String CODEC(ZSTD(3)),
     labels Nested(
         key String,
