@@ -196,6 +196,42 @@
             "source": "clickhouse_client.has_running_job_failed.table"
           }
         },
+        "has_running_job": {
+          "running_count": {
+            "type": "int",
+            "source": "clickhouse_client.has_running_job.running_count"
+          },
+          "running_timestamps": {
+            "type": "list",
+            "item_type": "int",
+            "source": "clickhouse_client.has_running_job.running_timestamps"
+          }
+        },
+        "try_mark_start": {
+          "running_count": {
+            "type": "int",
+            "source": "clickhouse_client.try_mark_start.running_count"
+          },
+          "timestamp_start": {
+            "type": "int",
+            "source": "clickhouse_client.try_mark_start.timestamp_start"
+          }
+        },
+        "try_mark_start_verification_failed": {
+          "running_count": {
+            "type": "int",
+            "source": "clickhouse_client.try_mark_start_verification_failed.running_count"
+          },
+          "timestamp_start": {
+            "type": "int",
+            "source": "clickhouse_client.try_mark_start_verification_failed.timestamp_start"
+          },
+          "running_timestamps": {
+            "type": "list",
+            "item_type": "int",
+            "source": "clickhouse_client.try_mark_start_verification_failed.running_timestamps"
+          }
+        },
         "try_mark_start_failed": {
           "error": {
             "type": "str",
