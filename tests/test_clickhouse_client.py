@@ -1168,6 +1168,35 @@ def test_clickhouse_client_try_mark_start_handles_query_error(
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_try_mark_start_verify_fails(
+    mock_get_client: Mock,
+) -> None:
+    """try_mark_start() should return False when INSERT succeeds but verify fails."""
+    mock_client = Mock()
+    mock_get_client.return_value = mock_client
+
+    # Check running count returns 0, INSERT succeeds, but verify query
+    # doesn't find our record (empty result_rows)
+    mock_result_running_count = Mock()
+    mock_result_running_count.result_rows = [[0]]  # No running jobs
+    mock_result_verify = Mock()
+    mock_result_verify.result_rows = []  # Record not found after INSERT
+    mock_client.query.side_effect = [
+        mock_result_running_count,  # Check running count
+        None,  # INSERT
+        mock_result_verify,  # Verify our record exists (empty - not found)
+    ]
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    result = client.try_mark_start(1700000100)
+
+    assert result is False
+    assert mock_client.query.call_count == 3  # running_count + INSERT + verify
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
 def test_clickhouse_client_get_state_with_naive_datetime(mock_get_client: Mock) -> None:
     """get_state() should handle naive datetime from ClickHouse.
 
