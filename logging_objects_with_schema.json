@@ -404,10 +404,20 @@
           "prom_response_file_size": {
             "type": "int",
             "source": "etl_job.fetch_data_success.prom_response_file_size"
+          }
+        },
+        "transformation_complete": {
+          "file_path": {
+            "type": "str",
+            "source": "etl_job.transformation_complete.file_path"
           },
           "output_file_size": {
             "type": "int",
-            "source": "etl_job.fetch_data_success.output_file_size"
+            "source": "etl_job.transformation_complete.output_file_size"
+          },
+          "rows_count": {
+            "type": "int",
+            "source": "etl_job.transformation_complete.rows_count"
           }
         },
         "save_state_failed": {
