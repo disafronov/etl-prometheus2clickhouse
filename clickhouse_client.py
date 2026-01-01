@@ -129,18 +129,19 @@ class ClickHouseClient:
         return int(value)
 
     def insert_from_file(self, file_path: str) -> None:
-        """Insert rows from JSONL file into configured table.
+        """Insert rows from TSV file into configured table.
 
         Streams data from file directly to ClickHouse via HTTP POST.
         This method is memory-efficient as it streams file without
         loading entire file into memory.
 
         Args:
-            file_path: Path to JSONL file with data in JSONEachRow format.
-                Each line must be a JSON object with keys: timestamp, name,
-                labels.key (array of strings), labels.value (array of strings),
-                and value. The id field is MATERIALIZED and always auto-generated.
-                If 'id' is present in JSON, it will be ignored or cause an error.
+            file_path: Path to TSV file with data in TabSeparated format.
+                Each row must have columns in order: timestamp, name,
+                labels.key (ClickHouse array format), labels.value (ClickHouse
+                array format), and value. The id field is MATERIALIZED and always
+                auto-generated. Arrays are in ClickHouse format: ['a','b'].
+                No header row is included.
 
         Raises:
             FileNotFoundError: If file doesn't exist
@@ -168,17 +169,22 @@ class ClickHouseClient:
 
         self._validate_table_name(self._table_metrics, "table_metrics")
 
-        # Use HTTP POST with streaming file upload
+        # Use HTTP POST with streaming file upload (like curl --data-binary)
+        # TabSeparated format supports arrays and Nested structures via HTTP
         # This is memory-efficient as it streams file directly to ClickHouse
         # without loading entire file into memory
         try:
             # Construct query parameter for INSERT statement
             # id field is MATERIALIZED, so it's always auto-generated and
-            # cannot be overridden. If 'id' is present in JSON, it will be
-            # ignored or cause an error.
-            query = f"INSERT INTO {self._table_metrics} FORMAT JSONEachRow"
+            # cannot be overridden.
+            # TabSeparated format expects columns in table order:
+            # timestamp, name, labels.key[], labels.value[], value
+            # Arrays are in ClickHouse format: ['a','b']
+            query = f"INSERT INTO {self._table_metrics} FORMAT TabSeparated"
 
             # Stream file directly to ClickHouse HTTP interface
+            # Using requests.post with file object enables streaming
+            # (like curl --data-binary @file.tsv)
             with open(file_path, "rb") as f:
                 response = requests.post(
                     self._http_url,

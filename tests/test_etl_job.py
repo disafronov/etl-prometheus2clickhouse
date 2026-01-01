@@ -109,21 +109,67 @@ class DummyClickHouseClient:
         if self._should_fail:
             raise Exception("ClickHouse insert failed")
         self.insert_from_file_calls.append(file_path)
-        # For testing purposes, read file and store as rows
-        import json
+        # For testing purposes, read TSV file and store as rows
         import os
 
         if os.path.getsize(file_path) == 0:
             return
 
         rows: list[dict[str, Any]] = []
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, "r", encoding="utf-8", newline="") as f:
             for line in f:
                 line = line.strip()
                 if not line:
                     continue
-                row = json.loads(line)
-                rows.append(row)
+                # TabSeparated format: timestamp, name, labels.key[], labels.value[],
+                # value (columns separated by tab)
+                # Arrays are in ClickHouse format: ['a','b'] or []
+                parts = line.split("\t")
+                if len(parts) < 5:
+                    continue
+
+                # Parse ClickHouse array format ['a','b'] to Python list
+                # Simple parser: remove brackets and split by comma, handle quotes
+                def parse_clickhouse_array(arr_str: str) -> list[str]:
+                    if arr_str == "[]":
+                        return []
+                    # Remove brackets and parse quoted strings
+                    # Format: ['a','b'] -> ['a', 'b']
+                    content = arr_str.strip("[]")
+                    if not content:
+                        return []
+                    # Split by ',' but respect quotes
+                    # This is simplified - assumes no commas in values
+                    elements = []
+                    current = ""
+                    in_quotes = False
+                    for char in content:
+                        if char == "'" and not (current and current[-1] == "\\"):
+                            in_quotes = not in_quotes
+                            if not in_quotes:
+                                elements.append(current)
+                                current = ""
+                        elif in_quotes:
+                            if char == "\\" and current and current[-1] == "\\":
+                                current = current[:-1] + char
+                            else:
+                                current += char
+                    if current:
+                        elements.append(current)
+                    return elements
+
+                labels_keys = parse_clickhouse_array(parts[2])
+                labels_values = parse_clickhouse_array(parts[3])
+                # Convert to dict format for compatibility with existing tests
+                rows.append(
+                    {
+                        "timestamp": int(parts[0]),
+                        "name": parts[1],
+                        "labels.key": labels_keys,
+                        "labels.value": labels_values,
+                        "value": float(parts[4]),
+                    }
+                )
         if rows:
             self.inserts.append(rows)
 
@@ -1098,7 +1144,7 @@ def test_etl_job_fetch_data_handles_file_cleanup_error_on_write_error() -> None:
     prom_fd = 123  # Dummy file descriptor for Prometheus response
     prom_file_path = f"{temp_dir}/prometheus_raw_test.json"
     output_fd = 124  # Dummy file descriptor for output
-    output_file_path = f"{temp_dir}/etl_processed_test.jsonl"
+    output_file_path = f"{temp_dir}/etl_processed_test.tsv"
 
     # Mock mkstemp to return different values for each call
     # First call: Prometheus response file, Second call: output file
