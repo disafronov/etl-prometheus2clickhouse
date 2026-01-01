@@ -449,10 +449,12 @@ class EtlJob:
 
                     for value_pair in series.get("values", []):
                         try:
-                            # ClickHouse DateTime requires integer Unix timestamp
-                            # Prometheus API returns timestamp as integer
-                            # (whole seconds) in JSON
-                            ts = int(value_pair[0])
+                            # Prometheus API returns timestamp as float
+                            # (seconds.fraction)
+                            # ClickHouse DateTime64(6) accepts float Unix timestamp
+                            # directly. No conversion needed - maximum performance
+                            # and precision
+                            ts = float(value_pair[0])
                             value = float(value_pair[1])
                         except (TypeError, ValueError, IndexError) as exc:
                             logger.warning(
