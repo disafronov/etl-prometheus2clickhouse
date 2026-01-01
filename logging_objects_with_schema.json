@@ -1,6 +1,6 @@
 {
   "etl-prometheus2clickhouse": {
-    "v7": {
+    "v8": {
       "main": {
         "application_error": {
           "error": {
@@ -42,56 +42,6 @@
           "response_preview": {
             "type": "str",
             "source": "prometheus_client.query_failed.response_preview"
-          }
-        },
-        "query_timeout": {
-          "error": {
-            "type": "str",
-            "source": "prometheus_client.query_timeout.error"
-          },
-          "expression": {
-            "type": "str",
-            "source": "prometheus_client.query_timeout.expression"
-          },
-          "url": {
-            "type": "str",
-            "source": "prometheus_client.query_timeout.url"
-          },
-          "timeout": {
-            "type": "int",
-            "source": "prometheus_client.query_timeout.timeout"
-          }
-        },
-        "query_connection_error": {
-          "error": {
-            "type": "str",
-            "source": "prometheus_client.query_connection_error.error"
-          },
-          "expression": {
-            "type": "str",
-            "source": "prometheus_client.query_connection_error.expression"
-          },
-          "url": {
-            "type": "str",
-            "source": "prometheus_client.query_connection_error.url"
-          }
-        },
-        "query_request_failed": {
-          "error": {
-            "type": "str",
-            "source": "prometheus_client.query_request_failed.error"
-          },
-          "error_type": {
-            "type": "str",
-            "source": "prometheus_client.query_request_failed.error_type"
-          },
-          "expression": {
-            "type": "str",
-            "source": "prometheus_client.query_request_failed.expression"
-          },
-          "url": {
-            "type": "str",
-            "source": "prometheus_client.query_request_failed.url"
           }
         },
         "query_range_timeout": {
@@ -266,12 +216,6 @@
           "message": {
             "type": "str",
             "source": "etl_job.check_start_failed.message"
-          }
-        },
-        "check_start_warning": {
-          "message": {
-            "type": "str",
-            "source": "etl_job.check_start_warning.message"
           }
         },
         "mark_start_failed": {
