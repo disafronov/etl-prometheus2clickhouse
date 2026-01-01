@@ -1,3 +1,9 @@
+## [5.0.0-rc.3](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0-rc.2...v5.0.0-rc.3) (2026-01-01)
+
+### Bug Fixes
+
+* Convert Unix timestamps to datetime objects in ClickHouseClient ([a347651](https://github.com/disafronov/etl-prometheus2clickhouse/commit/a34765170b6791702788711a0d5ae5e1578aaec3))
+
 ## [5.0.0-rc.2](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0-rc.1...v5.0.0-rc.2) (2025-12-30)
 
 ### Features
