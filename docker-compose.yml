@@ -155,7 +155,13 @@ configs:
   clickhouse_init_sql_metrics:
     content: |
       CREATE TABLE IF NOT EXISTS default.metrics (
-          id UUID MATERIALIZED generateUUIDv4(),
+          id UInt64 MATERIALIZED cityHash64(
+              timestamp,
+              name,
+              labels.key,
+              labels.value,
+              value
+          ) CODEC(ZSTD(6)),
           timestamp DateTime64(6, 'UTC'),
           name String CODEC(ZSTD(3)),
           labels Nested(
@@ -176,7 +182,14 @@ configs:
   clickhouse_init_sql_etl:
     content: |
       CREATE TABLE IF NOT EXISTS default.etl (
-          id UUID MATERIALIZED generateUUIDv4(),
+          id UInt64 MATERIALIZED cityHash64(
+              timestamp_start,
+              timestamp_end,
+              timestamp_progress,
+              batch_window_seconds,
+              batch_rows,
+              batch_skipped_count
+          ) CODEC(ZSTD(6)),
           timestamp_start Nullable(DateTime),
           timestamp_end Nullable(DateTime),
           timestamp_progress Nullable(DateTime),
