@@ -1,3 +1,32 @@
+## [5.0.0](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.2.0...v5.0.0) (2026-01-01)
+
+### ⚠ BREAKING CHANGES
+
+* labels format
+
+Signed-off-by: Dmitrii Safronov <zimniy@cyberbrain.cc>
+
+### Features
+
+* Add logging for transformed file details in ETL job ([19e5225](https://github.com/disafronov/etl-prometheus2clickhouse/commit/19e5225a4815c55e2d5e65864d0ad888162cd9e9))
+* Add minimum window start timestamp configuration and clamping logic ([9ffeb36](https://github.com/disafronov/etl-prometheus2clickhouse/commit/9ffeb3665d358bb3cfe9f4bb087e85f1e426be80))
+* Add Unix timestamp conversion for ClickHouse DateTime values ([ce6cdc5](https://github.com/disafronov/etl-prometheus2clickhouse/commit/ce6cdc5b4b2f31e77542218e20b441746ffa3cea))
+* Enhance ETL job data fetching and logging ([7c77e89](https://github.com/disafronov/etl-prometheus2clickhouse/commit/7c77e89d6455c2828bfa0a13b0deac4c538e4b24))
+* Enhance ETL job logging with additional output details ([a91bda2](https://github.com/disafronov/etl-prometheus2clickhouse/commit/a91bda28abc310ffdd201c440bf11ec4afb14559))
+* Enhance ETL job logging with Prometheus response details ([43a0edb](https://github.com/disafronov/etl-prometheus2clickhouse/commit/43a0edbf7be0e3fdc87b74b9848d2ce32bc118c3))
+* Implement event-based streaming parsing for Prometheus responses ([a99559d](https://github.com/disafronov/etl-prometheus2clickhouse/commit/a99559d5abf624cfd94bbe61477ab8b8178638d6))
+* Implement float formatting to prevent scientific notation in ETL job ([f20132e](https://github.com/disafronov/etl-prometheus2clickhouse/commit/f20132e138b84215d24cca7efa4bb844aca12a7a))
+
+### Bug Fixes
+
+* Convert Unix timestamps to datetime objects in ClickHouseClient ([17a63c9](https://github.com/disafronov/etl-prometheus2clickhouse/commit/17a63c9f6910631e3020c3b6c6402bca407642c5))
+* Enhance JSON parsing in ETL job with type assertions and decimal handling ([3d5fe24](https://github.com/disafronov/etl-prometheus2clickhouse/commit/3d5fe24c3291bff0c10f9043da9b45dd289194c7))
+* Normalize password handling in PrometheusClient authentication ([2f6a73f](https://github.com/disafronov/etl-prometheus2clickhouse/commit/2f6a73f1ffbc5bb8d9ad53b7a30d4d78b89f6cd4))
+
+### Code Refactoring
+
+* Update labels structure in ClickHouse schema and ETL job ([18b614b](https://github.com/disafronov/etl-prometheus2clickhouse/commit/18b614b2054431bd2ed5461c5b7885da8b18eb1d))
+
 ## [5.0.0-rc.9](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0-rc.8...v5.0.0-rc.9) (2026-01-01)
 
 ## [5.0.0-rc.8](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0-rc.7...v5.0.0-rc.8) (2026-01-01)
