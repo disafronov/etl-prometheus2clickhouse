@@ -662,11 +662,38 @@ class EtlJob:
                             #   (e.g., division by zero)
                             current_value_pair.append(float_value)
                             value_pair_index += 1
-                        except (TypeError, ValueError):
+                        except (TypeError, ValueError) as exc:
                             # Invalid value (non-numeric string that cannot be parsed).
                             # This is a format error, not a valid Prometheus value.
                             # Prometheus API should only return numbers or special
                             # strings like "NaN", "Inf", "-Inf", or numeric strings.
+                            # Build value_pair representation: timestamp should already
+                            # be in current_value_pair[0] if this is the value (index 1)
+                            if len(current_value_pair) > 0:
+                                # Timestamp is already parsed, use it
+                                ts = current_value_pair[0]
+                                value_pair_str = f"[{ts}, {value}]"
+                            else:
+                                # Timestamp not yet parsed (shouldn't happen for value)
+                                value_pair_str = f"[?, {value}]"
+                            logger.warning(
+                                "Skipping unparseable value in Prometheus response",
+                                extra={
+                                    "etl_job.invalid_value_pair.name": (
+                                        current_metric_name
+                                    ),
+                                    "etl_job.invalid_value_pair.labels": str(
+                                        current_labels
+                                    ),
+                                    "etl_job.invalid_value_pair.value_pair": (
+                                        value_pair_str
+                                    ),
+                                    "etl_job.invalid_value_pair.error": str(exc),
+                                    "etl_job.invalid_value_pair.error_type": type(
+                                        exc
+                                    ).__name__,
+                                },
+                            )
                             skipped_count += 1
                             current_value_pair = []
                             value_pair_index = 0
@@ -682,6 +709,9 @@ class EtlJob:
                                 extra={
                                     "etl_job.invalid_value_pair.name": (
                                         current_metric_name
+                                    ),
+                                    "etl_job.invalid_value_pair.labels": str(
+                                        current_labels
                                     ),
                                     "etl_job.invalid_value_pair.value_pair": str(
                                         current_value_pair
