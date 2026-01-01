@@ -1,3 +1,5 @@
+## [5.0.0-rc.9](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0-rc.8...v5.0.0-rc.9) (2026-01-01)
+
 ## [5.0.0-rc.8](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0-rc.7...v5.0.0-rc.8) (2026-01-01)
 
 ### Bug Fixes
