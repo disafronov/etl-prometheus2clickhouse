@@ -105,8 +105,8 @@ class EtlJob:
 
         file_path, rows_count = self._fetch_data(window_start, window_end)
 
-        # Log transformed file info after transformation, before loading to ClickHouse
         if rows_count > 0:
+            # Log transformed file info after transformation, before loading
             output_filename = os.path.basename(file_path)
             output_file_size = os.path.getsize(file_path)
             logger.info(
@@ -120,8 +120,6 @@ class EtlJob:
                     "etl_job.transformation_complete.rows_count": rows_count,
                 },
             )
-
-        if rows_count > 0:
             try:
                 self._ch.insert_from_file(file_path)
                 logger.info(
