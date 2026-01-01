@@ -181,6 +181,15 @@ class EtlConfig(BaseSettings):
         validation_alias="TEMP_DIR",
         description="Temporary directory for intermediate data files",
     )
+    min_window_start_timestamp: int = Field(
+        default=0,
+        validation_alias="MIN_WINDOW_START_TIMESTAMP",
+        description=(
+            "Minimum allowed window_start timestamp. Window start will be clamped "
+            "to this value if calculated start is earlier. Default is 0 (Unix epoch)."
+        ),
+        ge=0,
+    )
 
 
 class Config(BaseModel):

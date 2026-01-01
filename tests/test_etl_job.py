@@ -1197,6 +1197,74 @@ def test_etl_job_calc_window_without_overlap() -> None:
     assert window_end - window_start == 300
 
 
+def test_etl_job_calc_window_clamps_to_minimum() -> None:
+    """EtlJob._calc_window should clamp window_start to minimum timestamp."""
+    # Use model_construct to bypass env_ignore_empty=True which ignores constructor args
+    etl_config = EtlConfig.model_construct(
+        batch_window_size_seconds=300,
+        batch_window_overlap_seconds=20,
+        min_window_start_timestamp=100,
+    )
+    config = Config(
+        prometheus=PrometheusConfig(url="http://prom:9090"),
+        clickhouse=ClickHouseConfig(url="http://ch:8123", table_metrics="db.tbl"),
+        etl=etl_config,
+    )
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+    )
+
+    # Progress that would result in window_start < min_window_start_timestamp
+    progress = 50  # 50 - 20 (overlap) = 30, which is < 100
+    window_start, window_end = job._calc_window(progress)
+
+    # Window should be clamped to minimum
+    assert window_start == 100  # Clamped to min_window_start_timestamp
+    # Window should end at window_start + window_size
+    assert window_end == 400  # 100 + 300
+    # Window size should be exactly window_size
+    assert window_end - window_start == 300
+
+
+def test_etl_job_calc_window_no_clamp_when_above_minimum() -> None:
+    """EtlJob._calc_window should not clamp when window_start is above minimum."""
+    # Use model_construct to bypass env_ignore_empty=True which ignores constructor args
+    etl_config = EtlConfig.model_construct(
+        batch_window_size_seconds=300,
+        batch_window_overlap_seconds=20,
+        min_window_start_timestamp=100,
+    )
+    config = Config(
+        prometheus=PrometheusConfig(url="http://prom:9090"),
+        clickhouse=ClickHouseConfig(url="http://ch:8123", table_metrics="db.tbl"),
+        etl=etl_config,
+    )
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+    )
+
+    # Progress that results in window_start >= min_window_start_timestamp
+    progress = 150  # 150 - 20 (overlap) = 130, which is >= 100
+    window_start, window_end = job._calc_window(progress)
+
+    # Window should not be clamped
+    assert window_start == 130  # 150 - 20, not clamped
+    # Window should end at window_start + window_size
+    assert window_end == 430  # 130 + 300
+    # Window size should be exactly window_size
+    assert window_end - window_start == 300
+
+
 def test_etl_job_fetch_data_handles_file_write_error() -> None:
     """EtlJob._fetch_data should handle file write errors and clean up file."""
     from unittest.mock import patch
