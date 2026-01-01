@@ -106,7 +106,7 @@ class EtlJob:
             f"{format_timestamp_with_utc(window_end)}"
         )
 
-        file_path, rows_count, prom_response_path = self._fetch_data(
+        file_path, rows_count, prom_response_path, skipped_count = self._fetch_data(
             window_start, window_end
         )
 
@@ -176,6 +176,7 @@ class EtlJob:
             timestamp_progress=new_progress,
             window_seconds=int(actual_window),
             rows_count=rows_count,
+            skipped_count=skipped_count,
         )
 
     def _read_state_field(self, field_name: str) -> int | None:
@@ -376,7 +377,9 @@ class EtlJob:
         window_end = window_start + window_size  # End calculated from start
         return window_start, window_end
 
-    def _fetch_data(self, window_start: int, window_end: int) -> tuple[str, int, str]:
+    def _fetch_data(
+        self, window_start: int, window_end: int
+    ) -> tuple[str, int, str, int]:
         """Fetch data from Prometheus and transform to ClickHouse format.
 
         Implements streaming ETL pipeline with three stages:
@@ -394,10 +397,11 @@ class EtlJob:
             window_end: End of time range (Unix timestamp, int)
 
         Returns:
-            Tuple of (file_path, rows_count, prom_response_path) where file_path
-            is path to TSV file with processed data in TabSeparated format,
-            rows_count is number of rows written, and prom_response_path is path
-            to the original Prometheus response file
+            Tuple of (file_path, rows_count, prom_response_path, skipped_count)
+            where file_path is path to TSV file with processed data in
+            TabSeparated format, rows_count is number of rows written,
+            prom_response_path is path to the original Prometheus response file,
+            and skipped_count is number of value pairs skipped due to format errors
 
         Raises:
             Exception: If Prometheus query fails, JSON parsing fails, or file
@@ -521,7 +525,7 @@ class EtlJob:
             },
         )
 
-        return output_file_path, rows_count, prom_response_path
+        return output_file_path, rows_count, prom_response_path, skipped_count
 
     def _stream_parse_prometheus_response(
         self, input_f: BinaryIO, output_f: TextIO
@@ -897,6 +901,7 @@ class EtlJob:
         timestamp_progress: int,
         window_seconds: int,
         rows_count: int,
+        skipped_count: int,
     ) -> None:
         """Save progress and batch state to ClickHouse.
 
@@ -917,6 +922,7 @@ class EtlJob:
                 progress - overlap + window_size, ensuring proper overlap behavior)
             window_seconds: Size of processed window (for monitoring)
             rows_count: Number of rows processed (for monitoring)
+            skipped_count: Number of value pairs skipped due to format errors
 
         Raises:
             Exception: If ClickHouse save fails
@@ -928,11 +934,12 @@ class EtlJob:
                 timestamp_progress=timestamp_progress,
                 batch_window_seconds=window_seconds,
                 batch_rows=rows_count,
+                batch_skipped_count=skipped_count,
             )
             logger.info(
                 f"State saved: "
                 f"progress={format_timestamp_with_utc(timestamp_progress)}, "
-                f"rows={rows_count}, window={window_seconds}s"
+                f"rows={rows_count}, skipped={skipped_count}, window={window_seconds}s"
             )
         except Exception as exc:
             logger.error(
