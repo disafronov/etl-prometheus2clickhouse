@@ -155,15 +155,14 @@ CREATE TABLE default.etl (
         batch_rows,
         batch_skipped_count
     ) CODEC(ZSTD(6)),
-    timestamp_start Nullable(DateTime),
+    timestamp_start DateTime,
     timestamp_end Nullable(DateTime),
     timestamp_progress Nullable(DateTime),
     batch_window_seconds Nullable(Int64) CODEC(ZSTD(3)),
     batch_rows Nullable(Int64) CODEC(ZSTD(3)),
     batch_skipped_count Nullable(Int64) CODEC(ZSTD(3))
 ) ENGINE = ReplacingMergeTree()
-ORDER BY (timestamp_start)
-SETTINGS allow_nullable_key = 1;
+ORDER BY (timestamp_start);
 ```
 
 **Note on `id` column:** Same as in metrics table - MATERIALIZED column that is
