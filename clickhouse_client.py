@@ -153,7 +153,9 @@ class ClickHouseClient:
                 error_msg,
                 extra={
                     "clickhouse_client.insert_from_file_failed.error": error_msg,
-                    "clickhouse_client.insert_from_file_failed.file_path": file_path,
+                    "clickhouse_client.insert_from_file_failed.file_name": (
+                        os.path.basename(file_path)
+                    ),
                     "clickhouse_client.insert_from_file_failed.table": (
                         self._table_metrics
                     ),
@@ -204,7 +206,9 @@ class ClickHouseClient:
                 error_msg,
                 extra={
                     "clickhouse_client.insert_from_file_failed.error": str(exc),
-                    "clickhouse_client.insert_from_file_failed.file_path": file_path,
+                    "clickhouse_client.insert_from_file_failed.file_name": (
+                        os.path.basename(file_path)
+                    ),
                     "clickhouse_client.insert_from_file_failed.table": (
                         self._table_metrics
                     ),
