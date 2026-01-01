@@ -161,7 +161,7 @@ configs:
               labels.key,
               labels.value,
               value
-          ) CODEC(ZSTD(6)),
+          ),
           timestamp DateTime64(6, 'UTC'),
           name String CODEC(ZSTD(3)),
           labels Nested(
@@ -189,7 +189,7 @@ configs:
               coalesce(batch_window_seconds, 0),
               coalesce(batch_rows, 0),
               coalesce(batch_skipped_count, 0)
-          ) CODEC(ZSTD(6)),
+          ),
           timestamp_start DateTime,
           timestamp_end Nullable(DateTime),
           timestamp_progress Nullable(DateTime),
