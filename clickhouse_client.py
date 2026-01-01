@@ -228,9 +228,10 @@ class ClickHouseClient:
 
         Returns:
             Dictionary with keys: timestamp_progress, timestamp_start,
-            timestamp_end, batch_window_seconds, batch_rows.
+            timestamp_end, batch_window_seconds, batch_rows, batch_skipped_count.
             All values are int or None if not set. Timestamps are Unix timestamps
-            in seconds. batch_window_seconds and batch_rows are integers.
+            in seconds. batch_window_seconds, batch_rows, and batch_skipped_count
+            are integers.
 
         Raises:
             Exception: If query fails
@@ -249,7 +250,8 @@ class ClickHouseClient:
                     timestamp_end,
                     timestamp_progress,
                     batch_window_seconds,
-                    batch_rows
+                    batch_rows,
+                    batch_skipped_count
                 FROM {self._table_etl} FINAL
                 WHERE timestamp_progress IS NOT NULL
                   AND timestamp_end IS NOT NULL
@@ -266,6 +268,7 @@ class ClickHouseClient:
                     "timestamp_end": None,
                     "batch_window_seconds": None,
                     "batch_rows": None,
+                    "batch_skipped_count": None,
                 }
 
             row = result.result_rows[0]
@@ -275,6 +278,7 @@ class ClickHouseClient:
                 "timestamp_progress": self._to_unix_timestamp(row[2]),
                 "batch_window_seconds": int(row[3]) if row[3] is not None else None,
                 "batch_rows": int(row[4]) if row[4] is not None else None,
+                "batch_skipped_count": int(row[5]) if row[5] is not None else None,
             }
         except Exception as exc:
             error_msg = (
@@ -333,6 +337,7 @@ class ClickHouseClient:
         timestamp_end: int | None = None,
         batch_window_seconds: int | None = None,
         batch_rows: int | None = None,
+        batch_skipped_count: int | None = None,
     ) -> None:
         """Save ETL state in ClickHouse.
 
@@ -352,7 +357,7 @@ class ClickHouseClient:
         The id field is MATERIALIZED and always auto-generated, cannot be
         provided. Fields are saved in table order: id (auto-generated),
         timestamp_start, timestamp_end, timestamp_progress,
-        batch_window_seconds, batch_rows.
+        batch_window_seconds, batch_rows, batch_skipped_count.
 
         Args:
             timestamp_progress: Progress timestamp (Unix timestamp in seconds, int)
@@ -360,6 +365,7 @@ class ClickHouseClient:
             timestamp_end: End timestamp (Unix timestamp in seconds, int)
             batch_window_seconds: Window size in seconds
             batch_rows: Number of rows processed
+            batch_skipped_count: Number of value pairs skipped due to format errors
 
         Raises:
             Exception: If insert fails
@@ -404,6 +410,12 @@ class ClickHouseClient:
                 # timestamps, int for batch fields), which is correct for
                 # clickhouse-connect insert
                 values.append(batch_rows)  # type: ignore[arg-type]
+            if batch_skipped_count is not None:
+                columns.append("batch_skipped_count")
+                # Type ignore: values list contains mixed types (datetime for
+                # timestamps, int for batch fields), which is correct for
+                # clickhouse-connect insert
+                values.append(batch_skipped_count)  # type: ignore[arg-type]
 
             if not columns:
                 return  # Nothing to insert

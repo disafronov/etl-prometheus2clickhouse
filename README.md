@@ -144,7 +144,8 @@ CREATE TABLE default.etl (
     timestamp_end Nullable(DateTime),
     timestamp_progress Nullable(DateTime),
     batch_window_seconds Nullable(Int64) CODEC(ZSTD(3)),
-    batch_rows Nullable(Int64) CODEC(ZSTD(3))
+    batch_rows Nullable(Int64) CODEC(ZSTD(3)),
+    batch_skipped_count Nullable(Int64) CODEC(ZSTD(3))
 ) ENGINE = ReplacingMergeTree()
 ORDER BY (timestamp_start)
 SETTINGS allow_nullable_key = 1;
