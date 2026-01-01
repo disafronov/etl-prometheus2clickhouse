@@ -2,6 +2,7 @@
 Comprehensive tests for ClickHouseClient.
 """
 
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 import pytest
@@ -632,9 +633,18 @@ def test_clickhouse_client_save_state_success(mock_get_client: Mock) -> None:
     # Always uses INSERT (ReplacingMergeTree handles deduplication)
     # Fields saved in table order:
     # timestamp_start, timestamp_end, timestamp_progress, ...
+    # Timestamps are converted to datetime objects before insert
     mock_client.insert.assert_called_once_with(
         "default.etl",
-        [[1700000100, 1700000200, 1700000000, 300, 100]],
+        [
+            [
+                datetime.fromtimestamp(1700000100, tz=timezone.utc),
+                datetime.fromtimestamp(1700000200, tz=timezone.utc),
+                datetime.fromtimestamp(1700000000, tz=timezone.utc),
+                300,
+                100,
+            ]
+        ],
         column_names=[
             "timestamp_start",
             "timestamp_end",
@@ -662,9 +672,15 @@ def test_clickhouse_client_save_state_partial(mock_get_client: Mock) -> None:
     # Always uses INSERT with only provided fields
     # Fields saved in table order:
     # timestamp_start, timestamp_end, timestamp_progress, ...
+    # Timestamps are converted to datetime objects before insert
     mock_client.insert.assert_called_once_with(
         "default.etl",
-        [[1700000100, 1700000000]],
+        [
+            [
+                datetime.fromtimestamp(1700000100, tz=timezone.utc),
+                datetime.fromtimestamp(1700000000, tz=timezone.utc),
+            ]
+        ],
         column_names=["timestamp_start", "timestamp_progress"],
     )
 
@@ -700,9 +716,15 @@ def test_clickhouse_client_save_state_insert_new_record(mock_get_client: Mock) -
     # When timestamp_start is not provided, should use INSERT
     # Fields saved in table order:
     # timestamp_start, timestamp_end, timestamp_progress, ...
+    # Timestamps are converted to datetime objects before insert
     mock_client.insert.assert_called_once_with(
         "default.etl",
-        [[1700000200, 1700000000]],
+        [
+            [
+                datetime.fromtimestamp(1700000200, tz=timezone.utc),
+                datetime.fromtimestamp(1700000000, tz=timezone.utc),
+            ]
+        ],
         column_names=["timestamp_end", "timestamp_progress"],
     )
 
@@ -755,9 +777,10 @@ def test_clickhouse_client_save_state_custom_table(mock_get_client: Mock) -> Non
 
     client.save_state(timestamp_progress=1700000000)
 
+    # Timestamps are converted to datetime objects before insert
     mock_client.insert.assert_called_once_with(
         "custom.state_table",
-        [[1700000000]],
+        [[datetime.fromtimestamp(1700000000, tz=timezone.utc)]],
         column_names=["timestamp_progress"],
     )
 
@@ -776,9 +799,10 @@ def test_clickhouse_client_save_state_update_no_other_fields(
     client.save_state(timestamp_start=1700000100)
 
     # Always uses INSERT
+    # Timestamps are converted to datetime objects before insert
     mock_client.insert.assert_called_once_with(
         "default.etl",
-        [[1700000100]],
+        [[datetime.fromtimestamp(1700000100, tz=timezone.utc)]],
         column_names=["timestamp_start"],
     )
 
@@ -800,9 +824,15 @@ def test_clickhouse_client_save_state_update_with_end_only(
     )
 
     # Always uses INSERT with only provided fields
+    # Timestamps are converted to datetime objects before insert
     mock_client.insert.assert_called_once_with(
         "default.etl",
-        [[1700000100, 1700000200]],
+        [
+            [
+                datetime.fromtimestamp(1700000100, tz=timezone.utc),
+                datetime.fromtimestamp(1700000200, tz=timezone.utc),
+            ]
+        ],
         column_names=["timestamp_start", "timestamp_end"],
     )
 
@@ -883,9 +913,10 @@ def test_clickhouse_client_save_state_insert_with_start_only(
 
     client.save_state(timestamp_start=1700000100)
 
+    # Timestamps are converted to datetime objects before insert
     mock_client.insert.assert_called_once_with(
         "default.etl",
-        [[1700000100]],
+        [[datetime.fromtimestamp(1700000100, tz=timezone.utc)]],
         column_names=["timestamp_start"],
     )
 
