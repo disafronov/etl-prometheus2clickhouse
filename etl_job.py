@@ -104,6 +104,23 @@ class EtlJob:
         )
 
         file_path, rows_count = self._fetch_data(window_start, window_end)
+
+        # Log transformed file info after transformation, before loading to ClickHouse
+        if rows_count > 0:
+            output_filename = os.path.basename(file_path)
+            output_file_size = os.path.getsize(file_path)
+            logger.info(
+                f"Transformed file ready for ClickHouse: {output_filename}, "
+                f"size: {output_file_size} bytes",
+                extra={
+                    "etl_job.transformation_complete.file_path": file_path,
+                    "etl_job.transformation_complete.output_file_size": (
+                        output_file_size
+                    ),
+                    "etl_job.transformation_complete.rows_count": rows_count,
+                },
+            )
+
         if rows_count > 0:
             try:
                 self._ch.insert_from_file(file_path)
@@ -525,14 +542,8 @@ class EtlJob:
                 },
             )
 
-        prom_response_filename = os.path.basename(prom_response_path)
-        output_filename = os.path.basename(output_file_path)
-        output_file_size = os.path.getsize(output_file_path)
         logger.info(
-            f"Parsed {rows_count} data points from {series_count} metric series "
-            f"(Prometheus response: {prom_response_filename}, "
-            f"size: {prom_response_file_size} bytes; "
-            f"output file: {output_filename}, size: {output_file_size} bytes)",
+            f"Parsed {rows_count} data points from {series_count} metric series",
             extra={
                 "etl_job.fetch_data_success.series_count": series_count,
                 "etl_job.fetch_data_success.rows_count": rows_count,
@@ -543,7 +554,6 @@ class EtlJob:
                 "etl_job.fetch_data_success.prom_response_file_size": (
                     prom_response_file_size
                 ),
-                "etl_job.fetch_data_success.output_file_size": output_file_size,
             },
         )
 
