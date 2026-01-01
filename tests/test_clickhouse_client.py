@@ -1114,3 +1114,105 @@ def test_clickhouse_client_try_mark_start_handles_query_error(
 
     with pytest.raises(Exception, match="Query failed"):
         client.try_mark_start(1700000100)
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_get_state_with_naive_datetime(mock_get_client: Mock) -> None:
+    """get_state() should handle naive datetime from ClickHouse.
+
+    Tests _to_unix_timestamp() with naive datetime (no tzinfo).
+    ClickHouse returns naive datetime objects, which should be
+    treated as UTC.
+    """
+    from datetime import datetime
+
+    mock_client = Mock()
+    mock_result = Mock()
+    # ClickHouse returns naive datetime objects (no timezone info)
+    naive_dt = datetime(2023, 11, 15, 10, 0, 0)  # No timezone info
+    mock_result.result_rows = [(naive_dt, naive_dt, naive_dt, 300, 100)]
+    mock_client.query.return_value = mock_result
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    state = client.get_state()
+
+    # Should convert naive datetime to UTC timestamp
+    # datetime(2023, 11, 15, 10, 0, 0) in UTC = 1700042400 Unix timestamp
+    assert state["timestamp_start"] == 1700042400
+    assert state["timestamp_end"] == 1700042400
+    assert state["timestamp_progress"] == 1700042400
+    assert state["batch_window_seconds"] == 300
+    assert state["batch_rows"] == 100
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_get_state_with_non_utc_timezone(
+    mock_get_client: Mock,
+) -> None:
+    """get_state() should convert datetime with non-UTC timezone to UTC.
+
+    Tests _to_unix_timestamp() with datetime that has timezone
+    different from UTC. Should convert to UTC before converting
+    to Unix timestamp.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    mock_client = Mock()
+    mock_result = Mock()
+    # ClickHouse may return datetime with timezone (e.g., local timezone)
+    tz = timezone(timedelta(hours=3))  # UTC+3
+    dt_with_tz = datetime(2023, 11, 15, 10, 0, 0, tzinfo=tz)
+    mock_result.result_rows = [(dt_with_tz, dt_with_tz, dt_with_tz, 300, 100)]
+    mock_client.query.return_value = mock_result
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    state = client.get_state()
+
+    # Should convert to UTC timestamp
+    # datetime(2023, 11, 15, 10, 0, 0, UTC+3) = datetime(2023, 11, 15, 7, 0, 0, UTC)
+    # = 1700031600 Unix timestamp
+    assert state["timestamp_start"] == 1700031600
+    assert state["timestamp_end"] == 1700031600
+    assert state["timestamp_progress"] == 1700031600
+    assert state["batch_window_seconds"] == 300
+    assert state["batch_rows"] == 100
+
+
+@patch("clickhouse_client.clickhouse_connect.get_client")
+def test_clickhouse_client_get_state_with_utc_timezone(
+    mock_get_client: Mock,
+) -> None:
+    """get_state() should handle datetime already in UTC timezone.
+
+    Tests _to_unix_timestamp() with datetime that already has UTC timezone.
+    Should skip timezone conversion and go directly to timestamp conversion.
+    This covers the branch 124->127 where elif condition is False.
+    """
+    from datetime import datetime, timezone
+
+    mock_client = Mock()
+    mock_result = Mock()
+    # ClickHouse may return datetime already in UTC
+    dt_utc = datetime(2023, 11, 15, 10, 0, 0, tzinfo=timezone.utc)
+    mock_result.result_rows = [(dt_utc, dt_utc, dt_utc, 300, 100)]
+    mock_client.query.return_value = mock_result
+    mock_get_client.return_value = mock_client
+
+    cfg = _make_clickhouse_config()
+    client = ClickHouseClient(cfg)
+
+    state = client.get_state()
+
+    # Should use datetime as-is (already in UTC)
+    # datetime(2023, 11, 15, 10, 0, 0, UTC) = 1700042400 Unix timestamp
+    assert state["timestamp_start"] == 1700042400
+    assert state["timestamp_end"] == 1700042400
+    assert state["timestamp_progress"] == 1700042400
+    assert state["batch_window_seconds"] == 300
+    assert state["batch_rows"] == 100
