@@ -19,10 +19,12 @@ memory, enabling handling of very large Prometheus responses.
 
 from __future__ import annotations
 
+import math
 import os
 import tempfile
 import time
 from pathlib import Path
+from typing import BinaryIO, TextIO
 
 import ijson  # type: ignore[import-untyped]
 
@@ -365,6 +367,8 @@ class EtlJob:
 
         Queries all metrics using {__name__=~".+"} selector. All processing
         is done in streaming fashion without loading data into memory.
+        Uses event-based JSON parsing to avoid loading entire series values
+        arrays into memory, enabling processing of very large series.
 
         Args:
             window_start: Start of time range (Unix timestamp, int)
@@ -439,80 +443,12 @@ class EtlJob:
                 open(prom_response_path, "rb") as input_f,
                 os.fdopen(output_fd, "w", encoding="utf-8", newline="") as output_f,
             ):
-                # Stream parse JSON array items
-                parser = ijson.items(input_f, "data.result.item")
-
-                for series in parser:
-                    series_count += 1
-                    metric = series.get("metric", {})
-                    metric_name = metric.get("__name__", "")
-                    labels = metric.copy()
-                    labels.pop("__name__", None)
-
-                    for value_pair in series.get("values", []):
-                        try:
-                            # Prometheus API returns timestamp as float
-                            # (seconds.fraction)
-                            # ClickHouse DateTime64(6) accepts float Unix timestamp
-                            # directly. No conversion needed - maximum performance
-                            # and precision
-                            ts = float(value_pair[0])
-                            value = float(value_pair[1])
-                        except (TypeError, ValueError, IndexError) as exc:
-                            logger.warning(
-                                "Skipping invalid value pair in Prometheus response",
-                                extra={
-                                    "etl_job.invalid_value_pair.name": metric_name,
-                                    "etl_job.invalid_value_pair.value_pair": str(
-                                        value_pair
-                                    ),
-                                    "etl_job.invalid_value_pair.error": str(exc),
-                                    "etl_job.invalid_value_pair.error_type": type(
-                                        exc
-                                    ).__name__,
-                                },
-                            )
-                            continue
-
-                        # Prepare labels as Nested structure (arrays of keys and values)
-                        # ClickHouse Nested(key, value) expects two arrays:
-                        # labels.key = ['key1', 'key2', ...]
-                        # labels.value = ['value1', 'value2', ...]
-                        # Sort keys for consistent ORDER BY comparison.
-                        # ORDER BY uses arrayStringConcat(arraySort(labels.key), ',')
-                        # so sorting here ensures consistency with ClickHouse
-                        # comparison.
-                        labels_sorted = dict(sorted(labels.items()))
-
-                        # Convert to Nested format: separate arrays for keys and values
-                        labels_keys = list(labels_sorted.keys())
-                        labels_values = list(labels_sorted.values())
-
-                        # Format arrays for ClickHouse TabSeparated format
-                        # According to ClickHouse documentation:
-                        # - Arrays are written as ['a','b'] for strings
-                        # - Special characters in strings must be escaped: \ -> \\,
-                        #   ' -> \', \t -> \t, \n -> \n
-                        labels_keys_str = self._format_clickhouse_array(labels_keys)
-                        labels_values_str = self._format_clickhouse_array(labels_values)
-
-                        # Escape string values for TabSeparated format
-                        # TabSeparated requires escaping: \ -> \\, \t -> \t, \n -> \n
-                        metric_name_escaped = self._escape_tabseparated_chars(
-                            metric_name
-                        )
-
-                        # Write TabSeparated row: columns separated by \t, rows by \n
-                        # Column order: timestamp, name, labels.key[], labels.value[],
-                        # value
-                        # Use explicit formatting to prevent scientific notation:
-                        # - timestamp: .6f for DateTime64(6) precision (microseconds)
-                        # - value: custom format to avoid scientific notation
-                        output_f.write(
-                            f"{ts:.6f}\t{metric_name_escaped}\t{labels_keys_str}\t"
-                            f"{labels_values_str}\t{EtlJob._format_float(value)}\n"
-                        )
-                        rows_count += 1
+                # Use event-based streaming parsing to avoid loading entire series
+                # values arrays into memory. Each value point is processed individually
+                # as it's parsed, enabling handling of very large series.
+                rows_count, series_count = self._stream_parse_prometheus_response(
+                    input_f, output_f
+                )
 
         except Exception as exc:
             # Clean up both files on error
@@ -566,6 +502,172 @@ class EtlJob:
         )
 
         return output_file_path, rows_count, prom_response_path
+
+    def _stream_parse_prometheus_response(
+        self, input_f: BinaryIO, output_f: TextIO
+    ) -> tuple[int, int]:
+        """Stream parse Prometheus JSON response using event-based parsing.
+
+        Processes JSON using ijson events to avoid loading entire series values
+        arrays into memory. Each value point is processed individually as it's
+        parsed, enabling handling of very large series without memory issues.
+
+        Args:
+            input_f: Binary file object with Prometheus JSON response
+            output_f: Text file object for writing TSV output
+
+        Returns:
+            Tuple of (rows_count, series_count) where rows_count is number of
+            rows written and series_count is number of series processed
+
+        Raises:
+            Exception: If JSON parsing fails or data format is invalid
+        """
+        rows_count = 0
+        series_count = 0
+
+        # Current series state (reset for each series)
+        current_metric: dict[str, str] = {}
+        current_metric_name = ""
+        current_labels: dict[str, str] = {}
+        in_values_array = False
+        current_value_pair: list[float] = []
+        value_pair_index = 0
+
+        # Pre-computed labels formatting (only computed once per series)
+        # These are reused for all value points in the series
+        labels_keys_str = ""
+        labels_values_str = ""
+        metric_name_escaped = ""
+
+        # Parse JSON events stream
+        parser = ijson.parse(input_f)
+
+        for prefix, event, value in parser:
+            # Track when we enter a new series (data.result.item)
+            if prefix == "data.result.item" and event == "start_map":
+                # New series started - reset state
+                current_metric = {}
+                current_metric_name = ""
+                current_labels = {}
+                in_values_array = False
+                current_value_pair = []
+                value_pair_index = 0
+                series_count += 1
+
+            # Collect metric object (data.result.item.metric.*)
+            elif prefix.startswith("data.result.item.metric."):
+                if event == "string":
+                    # Extract label key from prefix
+                    # (e.g., "data.result.item.metric.__name__")
+                    label_key = prefix.split(".")[-1]
+                    current_metric[label_key] = str(value)
+
+            # Detect when metric object is complete
+            elif prefix == "data.result.item.metric" and event == "end_map":
+                # Metric object complete - extract metric_name and labels
+                current_metric_name = current_metric.get("__name__", "")
+                current_labels = current_metric.copy()
+                current_labels.pop("__name__", None)
+
+                # Pre-compute labels formatting for this series (reused for all points)
+                labels_sorted = dict(sorted(current_labels.items()))
+                labels_keys = list(labels_sorted.keys())
+                labels_values = list(labels_sorted.values())
+                labels_keys_str = self._format_clickhouse_array(labels_keys)
+                labels_values_str = self._format_clickhouse_array(labels_values)
+                metric_name_escaped = self._escape_tabseparated_chars(
+                    current_metric_name
+                )
+
+            # Track when we enter values array (data.result.item.values)
+            elif prefix == "data.result.item.values" and event == "start_array":
+                in_values_array = True
+                current_value_pair = []
+                value_pair_index = 0
+
+            # Track when we exit values array
+            elif prefix == "data.result.item.values" and event == "end_array":
+                in_values_array = False
+
+            # Process each value point in values array
+            # Each point is an array [timestamp, value]
+            # Events: start_array, number (timestamp), number/string (value), end_array
+            # ijson uses "data.result.item.values.item" prefix for array items
+            # and "data.result.item.values.item.item" for nested array elements
+            elif in_values_array:
+                # Check if this is an event for a value pair (array item)
+                # Prefix format: "data.result.item.values.item" for array item
+                # "data.result.item.values.item.item" for nested elements
+                if prefix == "data.result.item.values.item" and event == "start_array":
+                    # New value pair started (nested array [timestamp, value])
+                    current_value_pair = []
+                    value_pair_index = 0
+                elif prefix == "data.result.item.values.item.item":
+                    # This is an event inside a value pair array (timestamp or value)
+                    if event == "number":
+                        # Timestamp (index 0) or value (index 1) as number
+                        current_value_pair.append(float(value))
+                        value_pair_index += 1
+                    elif event == "string":
+                        # Value (index 1) as string - Prometheus may return values
+                        # as strings. This happens when value is "NaN", "Inf",
+                        # "-Inf", or numeric string
+                        try:
+                            float_value = float(value)
+                            # Check for special float values that should be skipped
+                            # (NaN, Inf, -Inf are not valid metric values)
+                            if math.isnan(float_value) or math.isinf(float_value):
+                                # Invalid value (NaN, Inf, -Inf), skip this pair
+                                current_value_pair = []
+                                value_pair_index = 0
+                            else:
+                                current_value_pair.append(float_value)
+                                value_pair_index += 1
+                        except (TypeError, ValueError):
+                            # Invalid value (non-numeric string), skip this pair
+                            current_value_pair = []
+                            value_pair_index = 0
+                elif prefix == "data.result.item.values.item" and event == "end_array":
+                    # Value pair complete - write row immediately
+                    if len(current_value_pair) == 2:
+                        try:
+                            ts = current_value_pair[0]
+                            val = current_value_pair[1]
+                        except (TypeError, ValueError, IndexError) as exc:
+                            logger.warning(
+                                "Skipping invalid value pair in Prometheus response",
+                                extra={
+                                    "etl_job.invalid_value_pair.name": (
+                                        current_metric_name
+                                    ),
+                                    "etl_job.invalid_value_pair.value_pair": str(
+                                        current_value_pair
+                                    ),
+                                    "etl_job.invalid_value_pair.error": str(exc),
+                                    "etl_job.invalid_value_pair.error_type": type(
+                                        exc
+                                    ).__name__,
+                                },
+                            )
+                            current_value_pair = []
+                            value_pair_index = 0
+                            continue
+
+                        # Write TabSeparated row immediately
+                        # Column order: timestamp, name, labels.key[],
+                        # labels.value[], value
+                        output_f.write(
+                            f"{ts:.6f}\t{metric_name_escaped}\t{labels_keys_str}\t"
+                            f"{labels_values_str}\t{EtlJob._format_float(val)}\n"
+                        )
+                        rows_count += 1
+
+                        # Clear value pair to free memory immediately
+                        current_value_pair = []
+                        value_pair_index = 0
+
+        return rows_count, series_count
 
     def _create_temp_file(
         self, prefix: str = "etl_batch_", suffix: str = ".tsv"
