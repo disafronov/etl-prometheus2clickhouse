@@ -1,3 +1,9 @@
+## [5.1.0-rc.2](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.0-rc.1...v5.1.0-rc.2) (2026-01-01)
+
+### Features
+
+* Add new logging fields for job running status in ClickHouse schema ([02c6363](https://github.com/disafronov/etl-prometheus2clickhouse/commit/02c636382e468789b1366a480b00511ff84d7d1c))
+
 ## [5.1.0-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0...v5.1.0-rc.1) (2026-01-01)
 
 ### Features
