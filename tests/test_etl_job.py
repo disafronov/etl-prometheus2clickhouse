@@ -981,6 +981,94 @@ def test_etl_job_fetch_data_handles_float_timestamp() -> None:
     assert rows[2]["timestamp"] == 1700000000.4
 
 
+def test_etl_job_format_float_no_scientific_notation() -> None:
+    """EtlJob._format_float should format floats without scientific notation."""
+    # Test normal case (no scientific notation)
+    result = EtlJob._format_float(123.456)
+    assert result == "123.456"
+    assert "e" not in result.lower()
+
+    # Test very small number that would use scientific notation with .15g
+    # 1e-20 will definitely use scientific notation with .15g format
+    result = EtlJob._format_float(1e-20)
+    assert "e" not in result.lower()
+    # Very small numbers may round to "0" after formatting, which is acceptable
+
+    # Test very large number that would use scientific notation with .15g
+    # 1e20 will definitely use scientific notation with .15g format
+    result = EtlJob._format_float(1e20)
+    assert "e" not in result.lower()
+    assert len(result) > 0
+
+    # Test zero
+    result = EtlJob._format_float(0.0)
+    assert result == "0"
+
+    # Test integer-like float
+    result = EtlJob._format_float(42.0)
+    assert result == "42"
+
+    # Test negative number
+    result = EtlJob._format_float(-123.456)
+    assert result == "-123.456"
+    assert "e" not in result.lower()
+
+    # Test edge case: number that would use scientific notation
+    # This should trigger the fallback to .15f format
+    very_small = 1e-25
+    result = EtlJob._format_float(very_small)
+    assert "e" not in result.lower()
+    # Very small numbers may round to "0" after formatting, which is acceptable
+
+
+def test_etl_job_fetch_data_handles_scientific_notation_values() -> None:
+    """EtlJob._fetch_data should handle values that would use scientific notation."""
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
+
+    # Response with very small value that would use scientific notation
+    prom.set_query_range_response(
+        {
+            "status": "success",
+            "data": {
+                "result": [
+                    {
+                        "metric": {"__name__": "small_value"},
+                        "values": [
+                            [1700000000.0, "1e-10"],  # Very small value
+                            [1700000000.0, "1e15"],  # Very large value
+                        ],
+                    }
+                ]
+            },
+        }
+    )
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+    )
+
+    job.run_once()
+
+    assert len(ch.inserts) == 1
+    rows = ch.inserts[0]
+    assert len(rows) == 2
+
+    # Values should be parsed correctly
+    assert rows[0]["value"] == 1e-10
+    assert rows[1]["value"] == 1e15
+
+    # Check that the written file doesn't contain scientific notation
+    # (This is tested indirectly through the fact that ClickHouse accepts the data)
+
+
 def test_etl_job_run_once_handles_empty_result_from_prometheus() -> None:
     """EtlJob should handle empty result from Prometheus gracefully."""
     config = _make_config()

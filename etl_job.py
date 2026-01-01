@@ -505,9 +505,12 @@ class EtlJob:
                         # Write TabSeparated row: columns separated by \t, rows by \n
                         # Column order: timestamp, name, labels.key[], labels.value[],
                         # value
+                        # Use explicit formatting to prevent scientific notation:
+                        # - timestamp: .6f for DateTime64(6) precision (microseconds)
+                        # - value: custom format to avoid scientific notation
                         output_f.write(
-                            f"{ts}\t{metric_name_escaped}\t{labels_keys_str}\t"
-                            f"{labels_values_str}\t{value}\n"
+                            f"{ts:.6f}\t{metric_name_escaped}\t{labels_keys_str}\t"
+                            f"{labels_values_str}\t{EtlJob._format_float(value)}\n"
                         )
                         rows_count += 1
 
@@ -633,6 +636,29 @@ class EtlJob:
             elem_escaped = EtlJob._escape_tabseparated_chars(elem).replace("'", "\\'")
             escaped.append(f"'{elem_escaped}'")
         return "[" + ",".join(escaped) + "]"
+
+    @staticmethod
+    def _format_float(value: float) -> str:
+        """Format float without scientific notation.
+
+        Formats float value ensuring no scientific notation is used.
+        Uses general format first, falls back to fixed format if scientific
+        notation would be used. This ensures ClickHouse can parse the value
+        correctly in TabSeparated format.
+
+        Args:
+            value: Float value to format
+
+        Returns:
+            Formatted string without scientific notation
+        """
+        # Try general format first (handles most cases efficiently)
+        formatted = f"{value:.15g}"
+        if "e" in formatted.lower():
+            # If scientific notation was used, use fixed format
+            # Remove trailing zeros and decimal point if not needed
+            formatted = f"{value:.15f}".rstrip("0").rstrip(".")
+        return formatted
 
     @staticmethod
     def _cleanup_temp_file(file_path: str) -> None:
