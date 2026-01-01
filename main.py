@@ -6,9 +6,8 @@ Application entry point.
 from __future__ import annotations
 
 import sys
+import tomllib
 from pathlib import Path
-
-import tomli
 
 from clickhouse_client import ClickHouseClient
 from config import Config, load_config
@@ -28,7 +27,7 @@ def _get_project_info() -> tuple[str, str, str]:
     """
     pyproject_path = Path(__file__).parent / "pyproject.toml"
     with pyproject_path.open("rb") as f:
-        data = tomli.load(f)
+        data = tomllib.load(f)
     project_name: str = data["project"]["name"]
     version: str = data["project"]["version"]
     # Get all authors' names, joined with comma, or "Unknown" if not found
