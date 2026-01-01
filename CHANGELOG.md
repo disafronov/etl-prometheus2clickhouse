@@ -1,3 +1,9 @@
+## [5.0.0-rc.7](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0-rc.6...v5.0.0-rc.7) (2026-01-01)
+
+### Bug Fixes
+
+* Normalize password handling in PrometheusClient authentication ([ccca438](https://github.com/disafronov/etl-prometheus2clickhouse/commit/ccca4382c7a40e155b4c57095f3da1ff2cd2db19))
+
 ## [5.0.0-rc.6](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0-rc.5...v5.0.0-rc.6) (2026-01-01)
 
 ### Features
