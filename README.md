@@ -117,7 +117,7 @@ CREATE TABLE default.metrics (
         labels.key,
         labels.value,
         value
-    ) CODEC(ZSTD(6)),
+    ),
     timestamp DateTime64(6, 'UTC'),
     name String CODEC(ZSTD(3)),
     labels Nested(
@@ -143,12 +143,12 @@ small date ranges, significantly improving performance.
 
 **Note on `id` column:** The `id` field is a MATERIALIZED column that is always
 auto-generated based on data content using `cityHash64()`. It provides unique
-identifier within the table (8 bytes, 50% smaller than UUID) and is compressed
-with ZSTD(6) codec for optimal compression of deterministic data. It is stored on
-disk and can be used in WHERE clauses, JOINs, and ORDER BY for efficient queries.
-By default, MATERIALIZED columns are not included in `SELECT *` results. To include
-`id` in results, either explicitly specify it (`SELECT id, * FROM ...`) or use
-the setting `SET asterisk_include_materialized_columns=1`.
+identifier within the table (8 bytes, 50% smaller than UUID). Hash values have
+high entropy and do not compress well, so no compression codec is applied to this
+column. It is stored on disk and can be used in WHERE clauses, JOINs, and ORDER BY
+for efficient queries. By default, MATERIALIZED columns are not included in
+`SELECT *` results. To include `id` in results, either explicitly specify it
+(`SELECT id, * FROM ...`) or use the setting `SET asterisk_include_materialized_columns=1`.
 
 ETL state table:
 
@@ -161,7 +161,7 @@ CREATE TABLE default.etl (
         coalesce(batch_window_seconds, 0),
         coalesce(batch_rows, 0),
         coalesce(batch_skipped_count, 0)
-    ) CODEC(ZSTD(6)),
+    ),
     timestamp_start DateTime,
     timestamp_end Nullable(DateTime),
     timestamp_progress Nullable(DateTime),
@@ -174,7 +174,8 @@ ORDER BY (timestamp_start);
 
 **Note on `id` column:** Same as in metrics table - MATERIALIZED column that is
 always auto-generated based on data content using `cityHash64()`, providing
-unique identifier within the table (8 bytes compressed with ZSTD(6) codec).
+unique identifier within the table (8 bytes, no compression codec applied as hash
+values have high entropy and do not compress well).
 
 ## Logging
 
