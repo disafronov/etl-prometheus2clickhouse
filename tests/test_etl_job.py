@@ -1021,6 +1021,28 @@ def test_etl_job_format_float_no_scientific_notation() -> None:
     # Very small numbers may round to "0" after formatting, which is acceptable
 
 
+def test_etl_job_format_float_handles_special_values() -> None:
+    """EtlJob._format_float should format NaN and Inf correctly for ClickHouse."""
+    import math
+
+    # Test NaN - ClickHouse expects "nan" (lowercase)
+    result = EtlJob._format_float(float("nan"))
+    assert result == "nan"
+
+    # Test positive infinity - ClickHouse expects "inf" (lowercase)
+    result = EtlJob._format_float(float("inf"))
+    assert result == "inf"
+
+    # Test negative infinity - ClickHouse expects "-inf" (lowercase)
+    result = EtlJob._format_float(float("-inf"))
+    assert result == "-inf"
+
+    # Verify these are actual special values
+    assert math.isnan(float("nan"))
+    assert math.isinf(float("inf"))
+    assert math.isinf(float("-inf"))
+
+
 def test_etl_job_fetch_data_handles_scientific_notation_values() -> None:
     """EtlJob._fetch_data should handle values that would use scientific notation."""
     config = _make_config()
@@ -1517,7 +1539,7 @@ def test_etl_job_stream_parse_handles_string_values_in_value_pairs() -> None:
 
 
 def test_etl_job_stream_parse_handles_invalid_string_values() -> None:
-    """_stream_parse_prometheus_response should skip invalid string values."""
+    """_stream_parse_prometheus_response preserves NaN/Inf and skips format errors."""
     config = _make_config()
     prom = DummyPromClient()
     ch = DummyClickHouseClient()
@@ -1526,7 +1548,8 @@ def test_etl_job_stream_parse_handles_invalid_string_values() -> None:
     ch._state["timestamp_end"] = None
     ch._state["timestamp_progress"] = 1700000000
 
-    # Response with invalid string values (NaN, Inf, non-numeric)
+    # Response with NaN, Inf values (should be preserved) and invalid format
+    # (should be skipped)
     prom.set_query_range_response(
         {
             "status": "success",
@@ -1536,10 +1559,11 @@ def test_etl_job_stream_parse_handles_invalid_string_values() -> None:
                         "metric": {"__name__": "test_metric"},
                         "values": [
                             [1700000000, "1"],  # Valid numeric string
-                            [1700000300, "NaN"],  # Invalid - should be skipped
-                            [1700000600, "Inf"],  # Invalid - should be skipped
-                            [1700000900, "invalid"],  # Invalid - should be skipped
-                            [1700001200, "2"],  # Valid numeric string
+                            [1700000300, "NaN"],  # Valid - should be preserved (NaN)
+                            [1700000600, "Inf"],  # Valid - should be preserved (Inf)
+                            [1700000900, "-Inf"],  # Valid - should be preserved (-Inf)
+                            [1700001200, "invalid"],  # Format error - should be skipped
+                            [1700001500, "2"],  # Valid numeric string
                         ],
                     }
                 ]
@@ -1555,12 +1579,21 @@ def test_etl_job_stream_parse_handles_invalid_string_values() -> None:
 
     job.run_once()
 
-    # Should only process valid value pairs (2 out of 5)
+    # Should process all valid value pairs including NaN/Inf (5 out of 6)
     assert len(ch.inserts) == 1
     rows = ch.inserts[0]
-    assert len(rows) == 2
+    assert len(rows) == 5
     assert rows[0]["value"] == 1.0
-    assert rows[1]["value"] == 2.0
+    import math
+
+    assert math.isnan(rows[1]["value"])  # NaN should be preserved
+    assert (
+        math.isinf(rows[2]["value"]) and rows[2]["value"] > 0
+    )  # Inf should be preserved
+    assert (
+        math.isinf(rows[3]["value"]) and rows[3]["value"] < 0
+    )  # -Inf should be preserved
+    assert rows[4]["value"] == 2.0
 
 
 def test_etl_job_stream_parse_handles_multiple_series_with_string_values() -> None:
