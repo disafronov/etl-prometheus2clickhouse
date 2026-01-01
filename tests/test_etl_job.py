@@ -1347,3 +1347,418 @@ def test_etl_job_run_once_handles_file_cleanup_error() -> None:
     # Should have written data and saved state
     assert len(ch.inserts) == 1
     assert ch._state["timestamp_progress"] is not None
+
+
+def test_etl_job_stream_parse_handles_string_values_in_metrics() -> None:
+    """_stream_parse_prometheus_response should handle string values in metrics."""
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
+
+    # Response with string values in metric labels (all label values are strings)
+    prom.set_query_range_response(
+        {
+            "status": "success",
+            "data": {
+                "result": [
+                    {
+                        "metric": {
+                            "__name__": "http_requests_total",
+                            "method": "GET",
+                            "status": "200",
+                            "instance": "localhost:9090",
+                        },
+                        "values": [[1700000000, "10"]],
+                    }
+                ]
+            },
+        }
+    )
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+    )
+
+    job.run_once()
+
+    # Should parse all metric labels correctly
+    assert len(ch.inserts) == 1
+    rows = ch.inserts[0]
+    assert len(rows) == 1
+
+    row = rows[0]
+    assert row["name"] == "http_requests_total"
+    labels_dict = dict(zip(row["labels.key"], row["labels.value"]))
+    assert labels_dict["method"] == "GET"
+    assert labels_dict["status"] == "200"
+    assert labels_dict["instance"] == "localhost:9090"
+
+
+def test_etl_job_stream_parse_handles_string_values_in_value_pairs() -> None:
+    """_stream_parse_prometheus_response should handle string values in value pairs."""
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
+
+    # Response with string values (Prometheus returns values as strings)
+    prom.set_query_range_response(
+        {
+            "status": "success",
+            "data": {
+                "result": [
+                    {
+                        "metric": {"__name__": "cpu_usage"},
+                        "values": [
+                            [1700000000, "0.5"],  # String value
+                            [1700000300, "0.75"],  # String value
+                            [1700000600, "0.25"],  # String value
+                        ],
+                    }
+                ]
+            },
+        }
+    )
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+    )
+
+    job.run_once()
+
+    # Should parse all string values correctly
+    assert len(ch.inserts) == 1
+    rows = ch.inserts[0]
+    assert len(rows) == 3
+
+    # Values should be converted to float
+    assert rows[0]["value"] == 0.5
+    assert rows[1]["value"] == 0.75
+    assert rows[2]["value"] == 0.25
+
+
+def test_etl_job_stream_parse_handles_invalid_string_values() -> None:
+    """_stream_parse_prometheus_response should skip invalid string values."""
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
+
+    # Response with invalid string values (NaN, Inf, non-numeric)
+    prom.set_query_range_response(
+        {
+            "status": "success",
+            "data": {
+                "result": [
+                    {
+                        "metric": {"__name__": "test_metric"},
+                        "values": [
+                            [1700000000, "1"],  # Valid numeric string
+                            [1700000300, "NaN"],  # Invalid - should be skipped
+                            [1700000600, "Inf"],  # Invalid - should be skipped
+                            [1700000900, "invalid"],  # Invalid - should be skipped
+                            [1700001200, "2"],  # Valid numeric string
+                        ],
+                    }
+                ]
+            },
+        }
+    )
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+    )
+
+    job.run_once()
+
+    # Should only process valid value pairs (2 out of 5)
+    assert len(ch.inserts) == 1
+    rows = ch.inserts[0]
+    assert len(rows) == 2
+    assert rows[0]["value"] == 1.0
+    assert rows[1]["value"] == 2.0
+
+
+def test_etl_job_stream_parse_handles_multiple_series_with_string_values() -> None:
+    """_stream_parse_prometheus_response should handle multiple series."""
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
+
+    # Response with multiple series, each with string values
+    prom.set_query_range_response(
+        {
+            "status": "success",
+            "data": {
+                "result": [
+                    {
+                        "metric": {
+                            "__name__": "metric1",
+                            "label1": "value1",
+                        },
+                        "values": [
+                            [1700000000, "10"],
+                            [1700000300, "20"],
+                        ],
+                    },
+                    {
+                        "metric": {
+                            "__name__": "metric2",
+                            "label2": "value2",
+                        },
+                        "values": [
+                            [1700000000, "30"],
+                        ],
+                    },
+                ]
+            },
+        }
+    )
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+    )
+
+    job.run_once()
+
+    # Should process all series and value pairs
+    assert len(ch.inserts) == 1
+    rows = ch.inserts[0]
+    assert len(rows) == 3
+
+    # Check that all values are parsed correctly
+    values = [row["value"] for row in rows]
+    assert 10.0 in values
+    assert 20.0 in values
+    assert 30.0 in values
+
+
+def test_etl_job_stream_parse_handles_complex_metric_labels() -> None:
+    """_stream_parse_prometheus_response should handle complex metric labels."""
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
+
+    # Response with complex metric labels (all string values)
+    # This ensures coverage of string event handling in metrics (line 560)
+    prom.set_query_range_response(
+        {
+            "status": "success",
+            "data": {
+                "result": [
+                    {
+                        "metric": {
+                            "__name__": "complex_metric",
+                            "label1": "value1",
+                            "label2": "value2",
+                            "label3": "value3",
+                            "instance": "localhost:9090",
+                            "job": "prometheus",
+                        },
+                        "values": [
+                            [1700000000, "100"],
+                            [1700000300, "200"],
+                        ],
+                    }
+                ]
+            },
+        }
+    )
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+    )
+
+    job.run_once()
+
+    # Should parse all metric labels correctly
+    assert len(ch.inserts) == 1
+    rows = ch.inserts[0]
+    assert len(rows) == 2
+
+    # Verify all labels are present
+    row = rows[0]
+    labels_dict = dict(zip(row["labels.key"], row["labels.value"]))
+    assert len(labels_dict) == 5  # label1, label2, label3, instance, job
+    assert labels_dict["label1"] == "value1"
+    assert labels_dict["instance"] == "localhost:9090"
+    assert labels_dict["job"] == "prometheus"
+
+
+def test_etl_job_stream_parse_handles_mixed_number_string_values() -> None:
+    """_stream_parse_prometheus_response should handle mixed number/string values."""
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
+
+    # Response with mix of number and string values
+    # This ensures coverage of string event handling in value pairs (line 612)
+    # Note: Prometheus API returns values as strings in JSON, but ijson may
+    # parse them as numbers if they're numeric. This test ensures both paths work.
+    prom.set_query_range_response(
+        {
+            "status": "success",
+            "data": {
+                "result": [
+                    {
+                        "metric": {"__name__": "mixed_metric"},
+                        "values": [
+                            [1700000000, "1.5"],  # String value
+                            [1700000300, "2.75"],  # String value
+                            [1700000600, "3.25"],  # String value
+                            [1700000900, "4.0"],  # String value
+                        ],
+                    }
+                ]
+            },
+        }
+    )
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+    )
+
+    job.run_once()
+
+    # Should parse all string values correctly
+    assert len(ch.inserts) == 1
+    rows = ch.inserts[0]
+    assert len(rows) == 4
+
+    # Values should be converted to float
+    assert rows[0]["value"] == 1.5
+    assert rows[1]["value"] == 2.75
+    assert rows[2]["value"] == 3.25
+    assert rows[3]["value"] == 4.0
+
+
+def test_etl_job_stream_parse_handles_single_value_pair() -> None:
+    """_stream_parse_prometheus_response should handle series with single value pair."""
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
+
+    # Response with single value pair per series
+    # This ensures coverage of end_array handling (line 634)
+    prom.set_query_range_response(
+        {
+            "status": "success",
+            "data": {
+                "result": [
+                    {
+                        "metric": {"__name__": "metric1"},
+                        "values": [[1700000000, "1"]],
+                    },
+                    {
+                        "metric": {"__name__": "metric2"},
+                        "values": [[1700000000, "2"]],
+                    },
+                    {
+                        "metric": {"__name__": "metric3"},
+                        "values": [[1700000000, "3"]],
+                    },
+                ]
+            },
+        }
+    )
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+    )
+
+    job.run_once()
+
+    # Should process all series with single value pairs
+    assert len(ch.inserts) == 1
+    rows = ch.inserts[0]
+    assert len(rows) == 3
+
+    # Verify all values are present
+    values = sorted([row["value"] for row in rows])
+    assert values == [1.0, 2.0, 3.0]
+
+
+def test_etl_job_stream_parse_handles_empty_value_pairs() -> None:
+    """_stream_parse_prometheus_response should skip empty or incomplete value pairs."""
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
+
+    # Response with empty arrays in values (should be skipped)
+    # This tests end_array handling when current_value_pair is incomplete
+    prom.set_query_range_response(
+        {
+            "status": "success",
+            "data": {
+                "result": [
+                    {
+                        "metric": {"__name__": "test_metric"},
+                        "values": [
+                            [1700000000, "1"],  # Valid
+                            [],  # Empty array - should be skipped
+                            [1700000300, "2"],  # Valid
+                        ],
+                    }
+                ]
+            },
+        }
+    )
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+    )
+
+    job.run_once()
+
+    # Should only process valid value pairs (2 out of 3)
+    assert len(ch.inserts) == 1
+    rows = ch.inserts[0]
+    assert len(rows) == 2
+    assert rows[0]["value"] == 1.0
+    assert rows[1]["value"] == 2.0
