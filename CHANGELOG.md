@@ -1,3 +1,10 @@
+## [5.1.0-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0...v5.1.0-rc.1) (2026-01-01)
+
+### Features
+
+* Add batch_skipped_count to ClickHouse ETL state management ([fc7fa44](https://github.com/disafronov/etl-prometheus2clickhouse/commit/fc7fa440c9780b2fef57073066b4fbc8f98ff74a))
+* Enhance logging for unparseable Prometheus values in ETL job ([6469f86](https://github.com/disafronov/etl-prometheus2clickhouse/commit/6469f8673fb98a7016c9f2a11a5baedbfaee41b8))
+
 ## [5.0.0](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v4.2.0...v5.0.0) (2026-01-01)
 
 ### ⚠ BREAKING CHANGES
