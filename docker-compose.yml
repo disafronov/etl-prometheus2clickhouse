@@ -156,7 +156,7 @@ configs:
     content: |
       CREATE TABLE IF NOT EXISTS default.metrics (
           id UUID MATERIALIZED generateUUIDv4(),
-          timestamp DateTime,
+          timestamp DateTime64(6, 'UTC'),
           name String CODEC(ZSTD(3)),
           labels Nested(
               key String,
