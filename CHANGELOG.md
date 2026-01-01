@@ -1,3 +1,10 @@
+## [5.0.0-rc.5](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0-rc.4...v5.0.0-rc.5) (2026-01-01)
+
+### Features
+
+* Implement event-based streaming parsing for Prometheus responses ([2e83e5c](https://github.com/disafronov/etl-prometheus2clickhouse/commit/2e83e5cbf2e619364519c32536164c84a7e13fb7))
+* Implement float formatting to prevent scientific notation in ETL job ([786d560](https://github.com/disafronov/etl-prometheus2clickhouse/commit/786d560a0b03d0ae77134839223d9f165b7e9227))
+
 ## [5.0.0-rc.4](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0-rc.3...v5.0.0-rc.4) (2026-01-01)
 
 ### Features
