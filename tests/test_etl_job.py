@@ -1026,9 +1026,9 @@ def test_etl_job_calc_window_with_overlap() -> None:
 
     # Window should start at progress - overlap
     assert window_start == 980  # 1000 - 20
-    # Window should end at window_start + window_size (maintains window_size)
+    # Window should end at window_start + window_size (calculated from start)
     assert window_end == 1280  # 980 + 300
-    # Window size should be exactly window_size (not window_size + overlap)
+    # Window size should be exactly window_size (overlap only shifts start backward)
     assert window_end - window_start == 300
 
 
