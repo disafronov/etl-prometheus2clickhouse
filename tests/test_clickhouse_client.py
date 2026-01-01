@@ -1039,7 +1039,6 @@ def test_clickhouse_client_get_running_job_timestamps_without_final(
     # Verify query does NOT use FINAL when use_final=False
     query_call = mock_client.query.call_args[0][0]
     assert "FINAL" not in query_call
-    assert "LEFT JOIN" in query_call
     assert "timestamp_start IS NOT NULL" in query_call
     assert "timestamp_end IS NULL" in query_call
 
@@ -1050,11 +1049,24 @@ def test_clickhouse_client_try_mark_start_success(mock_get_client: Mock) -> None
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
-    # First query (INSERT) succeeds
-    # Second query (verification) returns our timestamp_start as only running job
+    # First query (check running count) returns 0 (no running jobs)
+    # Second query (INSERT) succeeds
+    # Third query (verify our record exists) returns our timestamp_start
+    # Fourth query (check running jobs) returns our timestamp_start as only running job
+    mock_result_running_count = Mock()
+    mock_result_running_count.result_rows = [[0]]  # No running jobs
     mock_result_verify = Mock()
     mock_result_verify.result_rows = [[1700000100]]  # Our timestamp_start
-    mock_client.query.side_effect = [None, mock_result_verify]  # INSERT, then verify
+    mock_result_running = Mock()
+    mock_result_running.result_rows = [
+        [1700000100]
+    ]  # Our timestamp_start as only running
+    mock_client.query.side_effect = [
+        mock_result_running_count,  # Check running count
+        None,  # INSERT
+        mock_result_verify,  # Verify our record exists
+        mock_result_running,  # Check running jobs
+    ]
 
     cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
@@ -1062,7 +1074,9 @@ def test_clickhouse_client_try_mark_start_success(mock_get_client: Mock) -> None
     result = client.try_mark_start(1700000100)
 
     assert result is True
-    assert mock_client.query.call_count == 2  # INSERT + verification
+    assert (
+        mock_client.query.call_count == 4
+    )  # running_count + INSERT + verify + check running
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -1073,10 +1087,20 @@ def test_clickhouse_client_try_mark_start_when_other_job_running(
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
-    # INSERT succeeds, but verification shows different timestamp_start
+    # Check running count returns 0, INSERT succeeds, verify our record exists,
+    # but check running jobs shows different timestamp_start
+    mock_result_running_count = Mock()
+    mock_result_running_count.result_rows = [[0]]  # No running jobs
     mock_result_verify = Mock()
-    mock_result_verify.result_rows = [[1700000200]]  # Different timestamp_start
-    mock_client.query.side_effect = [None, mock_result_verify]
+    mock_result_verify.result_rows = [[1700000100]]  # Our record exists
+    mock_result_running = Mock()
+    mock_result_running.result_rows = [[1700000200]]  # Different timestamp_start
+    mock_client.query.side_effect = [
+        mock_result_running_count,  # Check running count
+        None,  # INSERT
+        mock_result_verify,  # Verify our record exists
+        mock_result_running,  # Check running jobs (different job)
+    ]
 
     cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
@@ -1084,7 +1108,9 @@ def test_clickhouse_client_try_mark_start_when_other_job_running(
     result = client.try_mark_start(1700000100)
 
     assert result is False
-    assert mock_client.query.call_count == 2
+    assert (
+        mock_client.query.call_count == 4
+    )  # running_count + INSERT + verify + check running
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -1095,10 +1121,23 @@ def test_clickhouse_client_try_mark_start_when_multiple_jobs_running(
     mock_client = Mock()
     mock_get_client.return_value = mock_client
 
-    # INSERT succeeds, but verification shows multiple running jobs
+    # Check running count returns 0, INSERT succeeds, verify our record exists,
+    # but check running jobs shows multiple running jobs
+    mock_result_running_count = Mock()
+    mock_result_running_count.result_rows = [[0]]  # No running jobs
     mock_result_verify = Mock()
-    mock_result_verify.result_rows = [[1700000200], [1700000100]]  # Multiple jobs
-    mock_client.query.side_effect = [None, mock_result_verify]
+    mock_result_verify.result_rows = [[1700000100]]  # Our record exists
+    mock_result_running = Mock()
+    mock_result_running.result_rows = [
+        [1700000200],
+        [1700000100],
+    ]  # Multiple jobs
+    mock_client.query.side_effect = [
+        mock_result_running_count,  # Check running count
+        None,  # INSERT
+        mock_result_verify,  # Verify our record exists
+        mock_result_running,  # Check running jobs (multiple)
+    ]
 
     cfg = _make_clickhouse_config()
     client = ClickHouseClient(cfg)
@@ -1106,7 +1145,9 @@ def test_clickhouse_client_try_mark_start_when_multiple_jobs_running(
     result = client.try_mark_start(1700000100)
 
     assert result is False
-    assert mock_client.query.call_count == 2
+    assert (
+        mock_client.query.call_count == 4
+    )  # running_count + INSERT + verify + check running
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")

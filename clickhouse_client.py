@@ -473,16 +473,14 @@ class ClickHouseClient:
         # in ClickHouse (especially Altinity builds) when using FINAL in subqueries.
         # The condition "closed.timestamp_start IS NULL" ensures we only get open
         # records without a corresponding closed record.
+        # Simplified logic: a running job is one that has timestamp_start
+        # but no timestamp_end (or timestamp_end IS NULL).
+        # If a record has timestamp_end, it's considered completed.
         query = f"""
-            SELECT DISTINCT open.timestamp_start
-            FROM {table_expr} AS open
-            LEFT JOIN {table_expr} AS closed
-              ON closed.timestamp_start = open.timestamp_start
-              AND closed.timestamp_end IS NOT NULL
-              AND closed.timestamp_end > closed.timestamp_start
-            WHERE open.timestamp_start IS NOT NULL
-              AND open.timestamp_end IS NULL
-              AND closed.timestamp_start IS NULL
+            SELECT DISTINCT timestamp_start
+            FROM {table_expr}
+            WHERE timestamp_start IS NOT NULL
+              AND timestamp_end IS NULL
         """  # nosec B608
 
         result = self._client.query(query)
@@ -509,7 +507,21 @@ class ClickHouseClient:
         """
         try:
             running_timestamps = self._get_running_job_timestamps(use_final=True)
-            return len(running_timestamps) > 0
+            has_running = len(running_timestamps) > 0
+            if has_running:
+                logger.info(
+                    f"Found {len(running_timestamps)} running job(s): "
+                    f"{running_timestamps}",
+                    extra={
+                        "clickhouse_client.has_running_job.running_count": (
+                            len(running_timestamps)
+                        ),
+                        "clickhouse_client.has_running_job.running_timestamps": (
+                            running_timestamps
+                        ),
+                    },
+                )
+            return has_running
         except Exception as exc:
             error_msg = f"Failed to check for running job: {type(exc).__name__}: {exc}"
             logger.error(
@@ -556,38 +568,99 @@ class ClickHouseClient:
             # AND timestamp_end > timestamp_start).
             # Use LEFT JOIN with COUNT to avoid correlated subquery issues
             # in ClickHouse 25.3+ (especially Altinity builds).
-            # We don't use FINAL in subquery because:
-            # 1. New inserts are visible immediately (before merge)
-            # 2. FINAL is expensive and not needed for this check
-            # 3. We need to check both open and closed records separately
+            # Use FINAL in subquery to ensure we see merged state after
+            # initialization or previous merges. This is important because
+            # after initialization, records may not be merged yet, and we
+            # need to see the actual state (merged records) to correctly
+            # determine if there are running jobs.
+            # Check running jobs count before INSERT for logging
+            # Simplified logic: a running job is one that has timestamp_start
+            # but no timestamp_end (or timestamp_end IS NULL).
+            # If a record has timestamp_end, it's considered completed.
+            running_count_query = f"""
+                SELECT COUNT(*)
+                FROM (SELECT * FROM {self._table_etl} FINAL)
+                WHERE timestamp_start IS NOT NULL
+                  AND timestamp_end IS NULL
+            """  # nosec B608
+
+            running_count_result = self._client.query(running_count_query)
+            running_count = (
+                running_count_result.result_rows[0][0]
+                if running_count_result.result_rows
+                else 0
+            )
+
+            logger.debug(
+                f"Checking running jobs before INSERT: count={running_count}, "
+                f"timestamp_start={timestamp_start}",
+                extra={
+                    "clickhouse_client.try_mark_start.running_count": running_count,
+                    "clickhouse_client.try_mark_start.timestamp_start": (
+                        timestamp_start
+                    ),
+                },
+            )
+
             query = f"""
                 INSERT INTO {self._table_etl} (timestamp_start)
                 SELECT toDateTime({timestamp_start})
-                WHERE (
-                    SELECT COUNT(*)
-                    FROM {self._table_etl} AS open
-                    LEFT JOIN {self._table_etl} AS closed
-                      ON closed.timestamp_start = open.timestamp_start
-                      AND closed.timestamp_end IS NOT NULL
-                      AND closed.timestamp_end > closed.timestamp_start
-                    WHERE open.timestamp_start IS NOT NULL
-                      AND open.timestamp_end IS NULL
-                      AND closed.timestamp_start IS NULL
-                ) = 0
+                WHERE {running_count} = 0
             """  # nosec B608
 
             self._client.query(query)
 
-            # Verify insertion succeeded by checking if we're the only running job
-            # Don't use FINAL here - new inserts are visible immediately (before merge)
-            running_timestamps = self._get_running_job_timestamps(use_final=False)
+            # Verify insertion succeeded by checking if our record exists
+            # Don't use FINAL here - new inserts are visible immediately
+            # (before merge). Check if our timestamp_start exists as a running
+            # job (timestamp_end IS NULL)
+            verify_query = f"""
+                SELECT timestamp_start
+                FROM {self._table_etl}
+                WHERE timestamp_start = toDateTime({timestamp_start})
+                  AND timestamp_end IS NULL
+                LIMIT 1
+            """  # nosec B608
 
-            # Check if we're the only running job and it's our timestamp_start
-            if (
-                len(running_timestamps) == 1
-                and running_timestamps[0] == timestamp_start
-            ):
-                return True
+            verify_result = self._client.query(verify_query)
+
+            # If our record exists, insertion succeeded
+            if verify_result.result_rows:
+                # Double-check: ensure we're the only running job
+                # Use FINAL to see merged state - previous job should have
+                # timestamp_end set after successful completion
+                running_timestamps = self._get_running_job_timestamps(use_final=True)
+                if (
+                    len(running_timestamps) == 1
+                    and running_timestamps[0] == timestamp_start
+                ):
+                    return True
+                else:
+                    logger.warning(
+                        "Insert succeeded but verification failed: "
+                        f"found {len(running_timestamps)} running jobs, "
+                        f"expected 1 with timestamp_start={timestamp_start}",
+                        extra={
+                            "clickhouse_client.try_mark_start_verification_failed.running_count": (  # noqa: E501
+                                len(running_timestamps)
+                            ),
+                            "clickhouse_client.try_mark_start_verification_failed.timestamp_start": (  # noqa: E501
+                                timestamp_start
+                            ),
+                            "clickhouse_client.try_mark_start_verification_failed.running_timestamps": (  # noqa: E501
+                                running_timestamps
+                            ),
+                        },
+                    )
+            else:
+                logger.warning(
+                    "Insert verification failed: record not found after INSERT",
+                    extra={
+                        "clickhouse_client.try_mark_start_verification_failed.timestamp_start": (  # noqa: E501
+                            timestamp_start
+                        ),
+                    },
+                )
 
             # Insert failed or verification failed
             return False
