@@ -5,6 +5,7 @@ Prometheus client for executing query_range requests.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import requests
@@ -200,8 +201,8 @@ class PrometheusClient:
                 "Failed to write Prometheus response to file",
                 extra={
                     "prometheus_client.query_range_to_file_failed.error": str(exc),
-                    "prometheus_client.query_range_to_file_failed.file_path": (
-                        file_path
+                    "prometheus_client.query_range_to_file_failed.file_name": (
+                        os.path.basename(file_path)
                     ),
                     "prometheus_client.query_range_to_file_failed.expression": expr,
                 },
