@@ -396,8 +396,23 @@ class EtlJob:
             )
             raise
 
-        # Get size of Prometheus response file
+        # Get size of Prometheus response file after successful download
         prom_response_file_size = os.path.getsize(prom_response_path)
+        prom_response_filename = os.path.basename(prom_response_path)
+        logger.info(
+            f"Downloaded Prometheus response: {prom_response_filename}, "
+            f"size: {prom_response_file_size} bytes",
+            extra={
+                "etl_job.prometheus_download_success.prom_response_path": (
+                    prom_response_path
+                ),
+                "etl_job.prometheus_download_success.prom_response_file_size": (
+                    prom_response_file_size
+                ),
+                "etl_job.prometheus_download_success.window_start": window_start,
+                "etl_job.prometheus_download_success.window_end": window_end,
+            },
+        )
 
         # Stage 2 - Transform: Stream parse JSON and process data
         output_fd, output_file_path = self._create_temp_file(
@@ -512,11 +527,12 @@ class EtlJob:
 
         prom_response_filename = os.path.basename(prom_response_path)
         output_filename = os.path.basename(output_file_path)
+        output_file_size = os.path.getsize(output_file_path)
         logger.info(
             f"Parsed {rows_count} data points from {series_count} metric series "
             f"(Prometheus response: {prom_response_filename}, "
             f"size: {prom_response_file_size} bytes; "
-            f"output file: {output_filename})",
+            f"output file: {output_filename}, size: {output_file_size} bytes)",
             extra={
                 "etl_job.fetch_data_success.series_count": series_count,
                 "etl_job.fetch_data_success.rows_count": rows_count,
@@ -527,6 +543,7 @@ class EtlJob:
                 "etl_job.fetch_data_success.prom_response_file_size": (
                     prom_response_file_size
                 ),
+                "etl_job.fetch_data_success.output_file_size": output_file_size,
             },
         )
 
