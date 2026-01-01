@@ -133,9 +133,10 @@ class EtlJob:
         expected_progress = progress + self._config.etl.batch_window_size_seconds
         new_progress = min(expected_progress, current_time)
         # actual_window is the size of data we actually processed
-        # We requested from window_start, but Prometheus returns data only up to
-        # current_time. So actual window is from window_start to new_progress
-        actual_window = new_progress - window_start
+        # We requested from window_start to window_end, but Prometheus returns
+        # data only up to current_time. So actual window is from window_start
+        # to min(window_end, current_time)
+        actual_window = min(window_end, current_time) - window_start
 
         # Log if window was reduced due to current time limit
         # This is expected behavior: system should not process future data
