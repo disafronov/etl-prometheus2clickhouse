@@ -566,17 +566,19 @@ class ClickHouseClient:
             # A running job is one that has an open record (timestamp_end IS NULL)
             # without a corresponding closed record (timestamp_end IS NOT NULL
             # AND timestamp_end > timestamp_start).
-            # Use LEFT JOIN with COUNT to avoid correlated subquery issues
-            # in ClickHouse 25.3+ (especially Altinity builds).
-            # Use FINAL in subquery to ensure we see merged state after
+            # Use subquery in WHERE clause to atomically check condition and insert.
+            # This ensures that the check and insert happen in a single atomic
+            # operation, preventing race conditions when multiple job instances try
+            # to start simultaneously. Use FINAL in subquery to ensure we see merged
+            # state after
             # initialization or previous merges. This is important because
             # after initialization, records may not be merged yet, and we
             # need to see the actual state (merged records) to correctly
             # determine if there are running jobs.
-            # Check running jobs count before INSERT for logging
             # Simplified logic: a running job is one that has timestamp_start
             # but no timestamp_end (or timestamp_end IS NULL).
             # If a record has timestamp_end, it's considered completed.
+            # Check running jobs count before INSERT for logging
             running_count_query = f"""
                 SELECT COUNT(*)
                 FROM (SELECT * FROM {self._table_etl} FINAL)
@@ -602,10 +604,19 @@ class ClickHouseClient:
                 },
             )
 
+            # Atomic INSERT with subquery in WHERE clause to ensure atomicity.
+            # The subquery checks for running jobs at the moment of INSERT execution,
+            # not at the moment of Python variable evaluation, preventing race
+            # conditions.
             query = f"""
                 INSERT INTO {self._table_etl} (timestamp_start)
                 SELECT toDateTime({timestamp_start})
-                WHERE {running_count} = 0
+                WHERE (
+                    SELECT COUNT(*)
+                    FROM (SELECT * FROM {self._table_etl} FINAL)
+                    WHERE timestamp_start IS NOT NULL
+                      AND timestamp_end IS NULL
+                ) = 0
             """  # nosec B608
 
             self._client.query(query)
