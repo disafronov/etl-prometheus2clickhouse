@@ -103,27 +103,38 @@ class EtlJob:
             f"{format_timestamp_with_utc(window_end)}"
         )
 
-        file_path, rows_count = self._fetch_data(window_start, window_end)
+        file_path, rows_count, prom_response_path = self._fetch_data(
+            window_start, window_end
+        )
 
         if rows_count > 0:
             # Log transformed file info after transformation, before loading
             output_filename = os.path.basename(file_path)
             output_file_size = os.path.getsize(file_path)
+            prom_response_filename = os.path.basename(prom_response_path)
             logger.info(
                 f"Transformed file ready for ClickHouse: {output_filename}, "
-                f"size: {output_file_size} bytes",
+                f"size: {output_file_size} bytes, rows: {rows_count}",
                 extra={
                     "etl_job.transformation_complete.file_path": file_path,
                     "etl_job.transformation_complete.output_file_size": (
                         output_file_size
                     ),
                     "etl_job.transformation_complete.rows_count": rows_count,
+                    "etl_job.transformation_complete.prom_response_filename": (
+                        prom_response_filename
+                    ),
                 },
             )
             try:
                 self._ch.insert_from_file(file_path)
                 logger.info(
-                    f"Successfully wrote data to ClickHouse from file {file_path}"
+                    f"Successfully wrote data to ClickHouse from {output_filename}, "
+                    f"rows: {rows_count}",
+                    extra={
+                        "etl_job.clickhouse_write_success.file_path": file_path,
+                        "etl_job.clickhouse_write_success.rows_count": rows_count,
+                    },
                 )
             except Exception as exc:
                 logger.error(
@@ -358,7 +369,7 @@ class EtlJob:
         window_end = window_start + window_size  # End calculated from start
         return window_start, window_end
 
-    def _fetch_data(self, window_start: int, window_end: int) -> tuple[str, int]:
+    def _fetch_data(self, window_start: int, window_end: int) -> tuple[str, int, str]:
         """Fetch data from Prometheus and transform to ClickHouse format.
 
         Implements streaming ETL pipeline with three stages:
@@ -374,9 +385,10 @@ class EtlJob:
             window_end: End of time range (Unix timestamp, int)
 
         Returns:
-            Tuple of (file_path, rows_count) where file_path is path to TSV file
-            with processed data in TabSeparated format and rows_count is number of
-            rows written
+            Tuple of (file_path, rows_count, prom_response_path) where file_path
+            is path to TSV file with processed data in TabSeparated format,
+            rows_count is number of rows written, and prom_response_path is path
+            to the original Prometheus response file
 
         Raises:
             Exception: If Prometheus query fails, JSON parsing fails, or file
@@ -555,7 +567,7 @@ class EtlJob:
             },
         )
 
-        return output_file_path, rows_count
+        return output_file_path, rows_count, prom_response_path
 
     def _create_temp_file(
         self, prefix: str = "etl_batch_", suffix: str = ".tsv"
