@@ -389,6 +389,10 @@
             "type": "int",
             "source": "etl_job.transformation_complete.series_count"
           },
+          "skipped_count": {
+            "type": "int",
+            "source": "etl_job.transformation_complete.skipped_count"
+          },
           "prom_response_filename": {
             "type": "str",
             "source": "etl_job.transformation_complete.prom_response_filename"
@@ -408,6 +412,30 @@
           "message": {
             "type": "str",
             "source": "etl_job.save_state_failed.message"
+          }
+        },
+        "window_start_clamped": {
+          "calculated": {
+            "type": "int",
+            "source": "etl_job.window_start_clamped.calculated"
+          },
+          "minimum": {
+            "type": "int",
+            "source": "etl_job.window_start_clamped.minimum"
+          }
+        },
+        "cleanup_failed": {
+          "file_path": {
+            "type": "str",
+            "source": "etl_job.cleanup_failed.file_path"
+          },
+          "error": {
+            "type": "str",
+            "source": "etl_job.cleanup_failed.error"
+          },
+          "error_type": {
+            "type": "str",
+            "source": "etl_job.cleanup_failed.error_type"
           }
         }
       }
