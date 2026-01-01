@@ -163,7 +163,7 @@ class DummyClickHouseClient:
                 # Convert to dict format for compatibility with existing tests
                 rows.append(
                     {
-                        "timestamp": int(parts[0]),
+                        "timestamp": float(parts[0]),
                         "name": parts[1],
                         "labels.key": labels_keys,
                         "labels.value": labels_values,
@@ -715,8 +715,8 @@ def test_etl_job_fetch_data_parses_prometheus_response() -> None:
     # Check first row structure
     row = rows[0]
     assert row["name"] == "http_requests_total"
-    # ClickHouse DateTime requires integer Unix timestamp
-    assert row["timestamp"] == 1700000000
+    # ClickHouse DateTime64(6) accepts float Unix timestamp
+    assert row["timestamp"] == 1700000000.0
     assert row["value"] == 10.0
     # Labels are stored as Nested structure (arrays of keys and values)
     assert "labels.key" in row
@@ -909,7 +909,7 @@ def test_etl_job_fetch_data_handles_invalid_value_pairs() -> None:
                         "values": [
                             [1700000000, "1"],  # Valid
                             [1700000300],  # Invalid: missing value
-                            ["invalid", "2"],  # Invalid: timestamp not integer
+                            ["invalid", "2"],  # Invalid: timestamp not numeric
                             [1700000600, "3"],  # Valid
                         ],
                     }
@@ -929,6 +929,56 @@ def test_etl_job_fetch_data_handles_invalid_value_pairs() -> None:
     # Should only process valid value pairs (2 out of 4)
     assert len(ch.inserts) == 1
     assert len(ch.inserts[0]) == 2
+
+
+def test_etl_job_fetch_data_handles_float_timestamp() -> None:
+    """EtlJob._fetch_data should preserve float timestamp precision."""
+    config = _make_config()
+    prom = DummyPromClient()
+    ch = DummyClickHouseClient()
+
+    ch._state["timestamp_start"] = None
+    ch._state["timestamp_end"] = None
+    ch._state["timestamp_progress"] = 1700000000
+
+    # Response with float timestamps (Prometheus returns float)
+    prom.set_query_range_response(
+        {
+            "status": "success",
+            "data": {
+                "result": [
+                    {
+                        "metric": {"__name__": "up"},
+                        "values": [
+                            [1700000000.123, "1"],  # Float timestamp with milliseconds
+                            [
+                                1700000000.789456,
+                                "2",
+                            ],  # Float timestamp with microseconds
+                            [1700000000.4, "3"],  # Float timestamp with fractional part
+                        ],
+                    }
+                ]
+            },
+        }
+    )
+
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+    )
+
+    job.run_once()
+
+    assert len(ch.inserts) == 1
+    rows = ch.inserts[0]
+    assert len(rows) == 3
+
+    # Check that float timestamps are preserved with full precision
+    assert rows[0]["timestamp"] == 1700000000.123
+    assert rows[1]["timestamp"] == 1700000000.789456
+    assert rows[2]["timestamp"] == 1700000000.4
 
 
 def test_etl_job_run_once_handles_empty_result_from_prometheus() -> None:
