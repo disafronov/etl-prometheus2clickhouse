@@ -17,7 +17,8 @@ The job:
   - `timestamp_start` – job start timestamp;
   - `timestamp_end` – job completion timestamp;
   - `batch_window_seconds` – size of processed window;
-  - `batch_rows` – number of rows processed in batch.
+  - `batch_rows` – number of rows processed in batch;
+  - `batch_skipped_count` – number of value pairs skipped due to format errors.
 
 All connection settings are provided via environment variables. Job state is
 stored in ClickHouse ETL table.
@@ -48,14 +49,20 @@ for the full list. The most important variables:
 - `PROMETHEUS_URL` – Prometheus/Mimir base URL;
   - Optional basic auth: set `PROMETHEUS_USER` and `PROMETHEUS_PASSWORD`;
   - Set `PROMETHEUS_INSECURE=1` to disable TLS verification;
+  - `PROMETHEUS_QUERY_STEP_SECONDS` – step resolution for query_range in seconds (default: `15`). Should match scrape_interval to get all data points;
+  - `PROMETHEUS_TIMEOUT` – HTTP request timeout in seconds (default: `10`);
 - `CLICKHOUSE_URL` – ClickHouse HTTP URL (required);
   - `CLICKHOUSE_TABLE_METRICS` – table name for metrics (default: `default.metrics`);
   - `CLICKHOUSE_TABLE_ETL` – table name for ETL state (default: `default.etl`);
   - Optional: `CLICKHOUSE_USER` and `CLICKHOUSE_PASSWORD` for authentication;
   - Set `CLICKHOUSE_INSECURE=1` to disable TLS verification;
-- `BATCH_WINDOW_SIZE_SECONDS` – processing window size in seconds;
+  - `CLICKHOUSE_CONNECT_TIMEOUT` – HTTP connection timeout in seconds (default: `10`);
+  - `CLICKHOUSE_SEND_RECEIVE_TIMEOUT` – HTTP send/receive timeout in seconds for insert operations (default: `300`);
+- `BATCH_WINDOW_SIZE_SECONDS` – processing window size in seconds (default: `300`);
 - `BATCH_WINDOW_OVERLAP_SECONDS` – overlap in seconds to avoid missing data at
-  boundaries;
+  boundaries (default: `0`);
+- `MIN_WINDOW_START_TIMESTAMP` – minimum allowed window_start timestamp. Window start will be clamped to this value if calculated start is earlier (default: `0`, Unix epoch);
+- `TEMP_DIR` – temporary directory for intermediate data files (default: `/tmp`);
 - `LOG_LEVEL` – logging level (default: `INFO`).
 
 ## Running
@@ -171,8 +178,20 @@ unique identifier within the table (8 bytes compressed with ZSTD(6) codec).
 
 ## Logging
 
-Logging is implemented with `logging-objects-with-schema` and standard Python
-logging formatters. Schema is defined in `logging_objects_with_schema.json`.
+Logging is implemented with `logging-objects-with-schema` and ECS (Elastic Common Schema) formatter for structured JSON logging.
+
+**Format:**
+
+- All logs are formatted as JSON using ECS (Elastic Common Schema) format
+- Timestamps are automatically formatted in UTC timezone
+- Structured fields are validated against schema defined in `logging_objects_with_schema.json`
+
+**Output:**
+
+- Non-error messages (DEBUG, INFO, WARNING) are sent to `stdout`
+- Error messages (ERROR and above) are sent to `stderr`
+
+This separation allows easy filtering and routing in containerized environments and log aggregation systems.
 
 ## Troubleshooting
 
