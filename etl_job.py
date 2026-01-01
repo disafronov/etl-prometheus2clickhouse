@@ -108,26 +108,9 @@ class EtlJob:
         )
 
         if rows_count > 0:
-            # Log transformed file info after transformation, before loading
-            output_filename = os.path.basename(file_path)
-            output_file_size = os.path.getsize(file_path)
-            prom_response_filename = os.path.basename(prom_response_path)
-            logger.info(
-                f"Transformed file ready for ClickHouse: {output_filename}, "
-                f"size: {output_file_size} bytes, rows: {rows_count}",
-                extra={
-                    "etl_job.transformation_complete.file_path": file_path,
-                    "etl_job.transformation_complete.output_file_size": (
-                        output_file_size
-                    ),
-                    "etl_job.transformation_complete.rows_count": rows_count,
-                    "etl_job.transformation_complete.prom_response_filename": (
-                        prom_response_filename
-                    ),
-                },
-            )
             try:
                 self._ch.insert_from_file(file_path)
+                output_filename = os.path.basename(file_path)
                 logger.info(
                     f"Successfully wrote data to ClickHouse from {output_filename}, "
                     f"rows: {rows_count}",
@@ -436,8 +419,6 @@ class EtlJob:
                 "etl_job.prometheus_download_success.prom_response_file_size": (
                     prom_response_file_size
                 ),
-                "etl_job.prometheus_download_success.window_start": window_start,
-                "etl_job.prometheus_download_success.window_end": window_end,
             },
         )
 
@@ -552,17 +533,22 @@ class EtlJob:
                 },
             )
 
+        # Log transformation complete with all file information
+        # This is logged inside transformation method as requested
+        output_filename = os.path.basename(output_file_path)
+        output_file_size = os.path.getsize(output_file_path)
+        prom_response_filename = os.path.basename(prom_response_path)
         logger.info(
-            f"Parsed {rows_count} data points from {series_count} metric series",
+            f"Transformed file ready for ClickHouse: {output_filename}, "
+            f"size: {output_file_size} bytes, rows: {rows_count}, "
+            f"series: {series_count}",
             extra={
-                "etl_job.fetch_data_success.series_count": series_count,
-                "etl_job.fetch_data_success.rows_count": rows_count,
-                "etl_job.fetch_data_success.window_start": window_start,
-                "etl_job.fetch_data_success.window_end": window_end,
-                "etl_job.fetch_data_success.file_path": output_file_path,
-                "etl_job.fetch_data_success.prom_response_path": prom_response_path,
-                "etl_job.fetch_data_success.prom_response_file_size": (
-                    prom_response_file_size
+                "etl_job.transformation_complete.file_path": output_file_path,
+                "etl_job.transformation_complete.output_file_size": (output_file_size),
+                "etl_job.transformation_complete.rows_count": rows_count,
+                "etl_job.transformation_complete.series_count": series_count,
+                "etl_job.transformation_complete.prom_response_filename": (
+                    prom_response_filename
                 ),
             },
         )
