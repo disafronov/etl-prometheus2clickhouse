@@ -172,18 +172,24 @@ This happens when the job successfully marks its start (`timestamp_start` is sav
 
 **Solution:**
 Set `timestamp_end` value in ClickHouse ETL table to a value greater than `timestamp_start`.
-This marks the previous job as completed and allows the new job to start:
+Since the table uses ReplacingMergeTree with ORDER BY (timestamp_start), you need to insert
+a record with the same `timestamp_start` as the running job. This marks the previous job
+as completed and allows the new job to start:
 
 ```bash
+# Get timestamp_start from the running job (last record with timestamp_end IS NULL)
+TIMESTAMP_START=$(clickhouse-client --query "SELECT timestamp_start FROM default.etl FINAL WHERE timestamp_end IS NULL ORDER BY timestamp_start DESC LIMIT 1 FORMAT TabSeparated")
 TIMESTAMP_END=$(date +%s)
-clickhouse-client --query "INSERT INTO default.etl (timestamp_end) VALUES (toDateTime($TIMESTAMP_END))"
+clickhouse-client --query "INSERT INTO default.etl (timestamp_start, timestamp_end) VALUES (toDateTime($TIMESTAMP_START), toDateTime($TIMESTAMP_END))"
 ```
 
 Or using HTTP interface:
 
 ```bash
+# Get timestamp_start from the running job
+TIMESTAMP_START=$(curl -s "http://clickhouse:8123/?query=SELECT+timestamp_start+FROM+default.etl+FINAL+WHERE+timestamp_end+IS+NULL+ORDER+BY+timestamp_start+DESC+LIMIT+1+FORMAT+TabSeparated")
 TIMESTAMP_END=$(date +%s)
-curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_end)+VALUES+(toDateTime($TIMESTAMP_END))"
+curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_start,timestamp_end)+VALUES+(toDateTime($TIMESTAMP_START),toDateTime($TIMESTAMP_END))"
 ```
 
 **Note:** After setting `timestamp_end`, the job will be able to pass the start check on the next run. However, if this was the first run and the job never completed successfully, `timestamp_progress` may be missing. In that case, the job will fail with "TimestampProgress not found in ClickHouse" error. You will need to set `timestamp_progress` manually as described in the "TimestampProgress Not Found in ClickHouse" section below.
