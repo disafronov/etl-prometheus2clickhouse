@@ -344,6 +344,8 @@ class EtlJob:
         Window starts at (progress - overlap) to create overlap for data
         reliability, and extends by window_size seconds from the start.
         Overlap shifts the window backward without changing its size.
+        Window start is clamped to min_window_start_timestamp to prevent
+        processing data before the configured minimum timestamp.
 
         Args:
             progress: Current progress timestamp (start of window without overlap, int)
@@ -353,7 +355,23 @@ class EtlJob:
         """
         overlap = self._config.etl.batch_window_overlap_seconds
         window_size = self._config.etl.batch_window_size_seconds
+        min_start = self._config.etl.min_window_start_timestamp
+
         window_start = progress - overlap  # Shift start backward for overlap
+        # Clamp window_start to minimum allowed timestamp
+        if window_start < min_start:
+            calculated_str = format_timestamp_with_utc(window_start)
+            minimum_str = format_timestamp_with_utc(min_start)
+            logger.warning(
+                f"Window start clamped to minimum: calculated={calculated_str}, "
+                f"minimum={minimum_str}",
+                extra={
+                    "etl_job.window_start_clamped.calculated": window_start,
+                    "etl_job.window_start_clamped.minimum": min_start,
+                },
+            )
+            window_start = min_start
+
         window_end = window_start + window_size  # End calculated from start
         return window_start, window_end
 
@@ -446,8 +464,8 @@ class EtlJob:
                 # Use event-based streaming parsing to avoid loading entire series
                 # values arrays into memory. Each value point is processed individually
                 # as it's parsed, enabling handling of very large series.
-                rows_count, series_count = self._stream_parse_prometheus_response(
-                    input_f, output_f
+                rows_count, series_count, skipped_count = (
+                    self._stream_parse_prometheus_response(input_f, output_f)
                 )
 
         except Exception as exc:
@@ -489,12 +507,13 @@ class EtlJob:
         logger.info(
             f"Transformed file ready for ClickHouse: {output_filename}, "
             f"size: {output_file_size} bytes, rows: {rows_count}, "
-            f"series: {series_count}",
+            f"series: {series_count}, skipped: {skipped_count}",
             extra={
                 "etl_job.transformation_complete.file_name": output_filename,
                 "etl_job.transformation_complete.output_file_size": (output_file_size),
                 "etl_job.transformation_complete.rows_count": rows_count,
                 "etl_job.transformation_complete.series_count": series_count,
+                "etl_job.transformation_complete.skipped_count": skipped_count,
                 "etl_job.transformation_complete.prom_response_filename": (
                     prom_response_filename
                 ),
@@ -505,7 +524,7 @@ class EtlJob:
 
     def _stream_parse_prometheus_response(
         self, input_f: BinaryIO, output_f: TextIO
-    ) -> tuple[int, int]:
+    ) -> tuple[int, int, int]:
         """Stream parse Prometheus JSON response using event-based parsing.
 
         Processes JSON using ijson events to avoid loading entire series values
@@ -517,14 +536,17 @@ class EtlJob:
             output_f: Text file object for writing TSV output
 
         Returns:
-            Tuple of (rows_count, series_count) where rows_count is number of
-            rows written and series_count is number of series processed
+            Tuple of (rows_count, series_count, skipped_count) where rows_count
+            is number of rows written, series_count is number of series processed,
+            and skipped_count is number of value pairs skipped due to invalid
+            values (NaN, Inf, -Inf, or non-numeric strings)
 
         Raises:
             Exception: If JSON parsing fails or data format is invalid
         """
         rows_count = 0
         series_count = 0
+        skipped_count = 0  # Track skipped value pairs (NaN, Inf, invalid)
 
         # Current series state (reset for each series)
         current_metric: dict[str, str] = {}
@@ -619,6 +641,7 @@ class EtlJob:
                             # (NaN, Inf, -Inf are not valid metric values)
                             if math.isnan(float_value) or math.isinf(float_value):
                                 # Invalid value (NaN, Inf, -Inf), skip this pair
+                                skipped_count += 1
                                 current_value_pair = []
                                 value_pair_index = 0
                             else:
@@ -626,6 +649,7 @@ class EtlJob:
                                 value_pair_index += 1
                         except (TypeError, ValueError):
                             # Invalid value (non-numeric string), skip this pair
+                            skipped_count += 1
                             current_value_pair = []
                             value_pair_index = 0
                 elif prefix == "data.result.item.values.item" and event == "end_array":
@@ -667,7 +691,7 @@ class EtlJob:
                         current_value_pair = []
                         value_pair_index = 0
 
-        return rows_count, series_count
+        return rows_count, series_count, skipped_count
 
     def _create_temp_file(
         self, prefix: str = "etl_batch_", suffix: str = ".tsv"
@@ -764,19 +788,50 @@ class EtlJob:
 
     @staticmethod
     def _cleanup_temp_file(file_path: str) -> None:
-        """Clean up temporary file, ignoring errors.
+        """Clean up temporary file, logging errors but not raising exceptions.
 
         Removes temporary file if it exists. All errors during cleanup are
-        silently ignored to prevent cleanup errors from masking original errors.
+        logged but not raised to prevent cleanup errors from masking original errors.
+        Common errors include: file already deleted, permission denied, file not found.
 
         Args:
             file_path: Path to temporary file to remove
         """
         try:
             os.unlink(file_path)
-        except Exception:  # nosec B110
-            # Ignore cleanup errors (file may not exist or already deleted)
+        except FileNotFoundError:
+            # File already deleted - this is fine, no need to log
             pass
+        except PermissionError as exc:
+            # Permission denied - log as warning
+            logger.warning(
+                f"Failed to remove temporary file due to permission error: {file_path}",
+                extra={
+                    "etl_job.cleanup_failed.file_path": file_path,
+                    "etl_job.cleanup_failed.error": str(exc),
+                    "etl_job.cleanup_failed.error_type": type(exc).__name__,
+                },
+            )
+        except OSError as exc:
+            # Other OS errors (e.g., device or resource busy) - log as warning
+            logger.warning(
+                f"Failed to remove temporary file: {file_path}",
+                extra={
+                    "etl_job.cleanup_failed.file_path": file_path,
+                    "etl_job.cleanup_failed.error": str(exc),
+                    "etl_job.cleanup_failed.error_type": type(exc).__name__,
+                },
+            )
+        except Exception as exc:  # nosec B110
+            # Unexpected errors - log as warning but don't raise
+            logger.warning(
+                f"Unexpected error removing temporary file: {file_path}",
+                extra={
+                    "etl_job.cleanup_failed.file_path": file_path,
+                    "etl_job.cleanup_failed.error": str(exc),
+                    "etl_job.cleanup_failed.error_type": type(exc).__name__,
+                },
+            )
 
     def _save_state_after_success(
         self,
