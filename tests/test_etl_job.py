@@ -61,6 +61,7 @@ class DummyClickHouseClient:
             "timestamp_end": None,
             "batch_window_seconds": None,
             "batch_rows": None,
+            "batch_skipped_count": None,
         }
         self._should_fail_get_state = False
         self._should_fail_get_state_with_value_error = False
@@ -91,6 +92,7 @@ class DummyClickHouseClient:
         timestamp_end: int | None = None,
         batch_window_seconds: int | None = None,
         batch_rows: int | None = None,
+        batch_skipped_count: int | None = None,
     ) -> None:
         """Set state directly for testing purposes."""
         if timestamp_progress is not None:
@@ -103,6 +105,8 @@ class DummyClickHouseClient:
             self._state["batch_window_seconds"] = batch_window_seconds
         if batch_rows is not None:
             self._state["batch_rows"] = batch_rows
+        if batch_skipped_count is not None:
+            self._state["batch_skipped_count"] = batch_skipped_count
 
     def insert_from_file(self, file_path: str) -> None:
         """Mock insert_from_file method."""
@@ -188,6 +192,7 @@ class DummyClickHouseClient:
         timestamp_end: int | None = None,
         batch_window_seconds: int | None = None,
         batch_rows: int | None = None,
+        batch_skipped_count: int | None = None,
     ) -> None:
         """Mock save_state method."""
         if self._should_fail_save_state:
@@ -202,6 +207,8 @@ class DummyClickHouseClient:
             self._state["batch_window_seconds"] = batch_window_seconds
         if batch_rows is not None:
             self._state["batch_rows"] = batch_rows
+        if batch_skipped_count is not None:
+            self._state["batch_skipped_count"] = batch_skipped_count
 
     def has_running_job(self) -> bool:
         """Mock has_running_job method."""

@@ -445,7 +445,7 @@ def test_clickhouse_client_get_state_success(mock_get_client: Mock) -> None:
     mock_result = Mock()
     # Order: timestamp_start, timestamp_end, timestamp_progress,
     # batch_window_seconds, batch_rows
-    mock_result.result_rows = [(1700000100, 1700000200, 1700000000, 300, 100)]
+    mock_result.result_rows = [(1700000100, 1700000200, 1700000000, 300, 100, 5)]
     mock_client.query.return_value = mock_result
     mock_get_client.return_value = mock_client
 
@@ -460,6 +460,7 @@ def test_clickhouse_client_get_state_success(mock_get_client: Mock) -> None:
         "timestamp_end": 1700000200,
         "batch_window_seconds": 300,
         "batch_rows": 100,
+        "batch_skipped_count": 5,
     }
     mock_client.query.assert_called_once()
 
@@ -484,6 +485,7 @@ def test_clickhouse_client_get_state_empty_result(mock_get_client: Mock) -> None
         "timestamp_end": None,
         "batch_window_seconds": None,
         "batch_rows": None,
+        "batch_skipped_count": None,
     }
 
 
@@ -494,7 +496,7 @@ def test_clickhouse_client_get_state_with_nulls(mock_get_client: Mock) -> None:
     mock_result = Mock()
     # Order: timestamp_start, timestamp_end, timestamp_progress,
     # batch_window_seconds, batch_rows
-    mock_result.result_rows = [(1700000100, None, 1700000000, None, 100)]
+    mock_result.result_rows = [(1700000100, None, 1700000000, None, 100, None)]
     mock_client.query.return_value = mock_result
     mock_get_client.return_value = mock_client
 
@@ -509,6 +511,7 @@ def test_clickhouse_client_get_state_with_nulls(mock_get_client: Mock) -> None:
         "timestamp_end": None,
         "batch_window_seconds": None,
         "batch_rows": 100,
+        "batch_skipped_count": None,
     }
 
 
@@ -628,6 +631,7 @@ def test_clickhouse_client_save_state_success(mock_get_client: Mock) -> None:
         timestamp_end=1700000200,
         batch_window_seconds=300,
         batch_rows=100,
+        batch_skipped_count=5,
     )
 
     # Always uses INSERT (ReplacingMergeTree handles deduplication)
@@ -643,6 +647,7 @@ def test_clickhouse_client_save_state_success(mock_get_client: Mock) -> None:
                 datetime.fromtimestamp(1700000000, tz=timezone.utc),
                 300,
                 100,
+                5,
             ]
         ],
         column_names=[
@@ -651,6 +656,7 @@ def test_clickhouse_client_save_state_success(mock_get_client: Mock) -> None:
             "timestamp_progress",
             "batch_window_seconds",
             "batch_rows",
+            "batch_skipped_count",
         ],
     )
 
@@ -935,12 +941,13 @@ def test_clickhouse_client_save_state_insert_with_batch_fields(
     client.save_state(
         batch_window_seconds=300,
         batch_rows=100,
+        batch_skipped_count=5,
     )
 
     mock_client.insert.assert_called_once_with(
         "default.etl",
-        [[300, 100]],
-        column_names=["batch_window_seconds", "batch_rows"],
+        [[300, 100, 5]],
+        column_names=["batch_window_seconds", "batch_rows", "batch_skipped_count"],
     )
 
 
@@ -1133,7 +1140,7 @@ def test_clickhouse_client_get_state_with_naive_datetime(mock_get_client: Mock) 
     mock_result = Mock()
     # ClickHouse returns naive datetime objects (no timezone info)
     naive_dt = datetime(2023, 11, 15, 10, 0, 0)  # No timezone info
-    mock_result.result_rows = [(naive_dt, naive_dt, naive_dt, 300, 100)]
+    mock_result.result_rows = [(naive_dt, naive_dt, naive_dt, 300, 100, 5)]
     mock_client.query.return_value = mock_result
     mock_get_client.return_value = mock_client
 
@@ -1168,7 +1175,7 @@ def test_clickhouse_client_get_state_with_non_utc_timezone(
     # ClickHouse may return datetime with timezone (e.g., local timezone)
     tz = timezone(timedelta(hours=3))  # UTC+3
     dt_with_tz = datetime(2023, 11, 15, 10, 0, 0, tzinfo=tz)
-    mock_result.result_rows = [(dt_with_tz, dt_with_tz, dt_with_tz, 300, 100)]
+    mock_result.result_rows = [(dt_with_tz, dt_with_tz, dt_with_tz, 300, 100, 5)]
     mock_client.query.return_value = mock_result
     mock_get_client.return_value = mock_client
 
@@ -1185,6 +1192,7 @@ def test_clickhouse_client_get_state_with_non_utc_timezone(
     assert state["timestamp_progress"] == 1700031600
     assert state["batch_window_seconds"] == 300
     assert state["batch_rows"] == 100
+    assert state["batch_skipped_count"] == 5
 
 
 @patch("clickhouse_client.clickhouse_connect.get_client")
@@ -1203,7 +1211,7 @@ def test_clickhouse_client_get_state_with_utc_timezone(
     mock_result = Mock()
     # ClickHouse may return datetime already in UTC
     dt_utc = datetime(2023, 11, 15, 10, 0, 0, tzinfo=timezone.utc)
-    mock_result.result_rows = [(dt_utc, dt_utc, dt_utc, 300, 100)]
+    mock_result.result_rows = [(dt_utc, dt_utc, dt_utc, 300, 100, 5)]
     mock_client.query.return_value = mock_result
     mock_get_client.return_value = mock_client
 
@@ -1219,3 +1227,4 @@ def test_clickhouse_client_get_state_with_utc_timezone(
     assert state["timestamp_progress"] == 1700042400
     assert state["batch_window_seconds"] == 300
     assert state["batch_rows"] == 100
+    assert state["batch_skipped_count"] == 5
