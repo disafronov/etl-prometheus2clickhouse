@@ -1,3 +1,9 @@
+## [5.0.0-rc.8](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0-rc.7...v5.0.0-rc.8) (2026-01-01)
+
+### Bug Fixes
+
+* Enhance JSON parsing in ETL job with type assertions and decimal handling ([6ee84ed](https://github.com/disafronov/etl-prometheus2clickhouse/commit/6ee84ed8000efbc011fa56b9ac1ab1487e51711a))
+
 ## [5.0.0-rc.7](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.0.0-rc.6...v5.0.0-rc.7) (2026-01-01)
 
 ### Bug Fixes
