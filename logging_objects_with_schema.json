@@ -296,6 +296,24 @@
             "source": "etl_job.fetch_failed.prom_response_path"
           }
         },
+        "prometheus_download_success": {
+          "prom_response_path": {
+            "type": "str",
+            "source": "etl_job.prometheus_download_success.prom_response_path"
+          },
+          "prom_response_file_size": {
+            "type": "int",
+            "source": "etl_job.prometheus_download_success.prom_response_file_size"
+          },
+          "window_start": {
+            "type": "int",
+            "source": "etl_job.prometheus_download_success.window_start"
+          },
+          "window_end": {
+            "type": "int",
+            "source": "etl_job.prometheus_download_success.window_end"
+          }
+        },
         "write_failed": {
           "message": {
             "type": "str",
@@ -386,6 +404,10 @@
           "prom_response_file_size": {
             "type": "int",
             "source": "etl_job.fetch_data_success.prom_response_file_size"
+          },
+          "output_file_size": {
+            "type": "int",
+            "source": "etl_job.fetch_data_success.output_file_size"
           }
         },
         "save_state_failed": {
