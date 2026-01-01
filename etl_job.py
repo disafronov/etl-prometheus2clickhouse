@@ -23,10 +23,11 @@ import math
 import os
 import tempfile
 import time
+from decimal import Decimal
 from pathlib import Path
 from typing import BinaryIO, TextIO
 
-import ijson  # type: ignore[import-untyped]
+import ijson
 
 from clickhouse_client import ClickHouseClient
 from config import Config
@@ -563,7 +564,8 @@ class EtlJob:
         metric_name_escaped = ""
 
         # Parse JSON events stream
-        parser = ijson.parse(input_f)
+        # use_float=True ensures numbers are returned as float, not Decimal
+        parser = ijson.parse(input_f, use_float=True)
 
         for prefix, event, value in parser:
             # Track when we enter a new series (data.result.item)
@@ -629,12 +631,25 @@ class EtlJob:
                     # This is an event inside a value pair array (timestamp or value)
                     if event == "number":
                         # Timestamp (index 0) or value (index 1) as number
+                        # Type narrowing: when event is "number",
+                        # value is int | float | Decimal
+                        # ijson may return Decimal even with use_float=True
+                        # nosec B101: assert for type narrowing, not runtime validation
+                        assert isinstance(
+                            value, (int, float, Decimal)
+                        ), "number event must have int, float, or Decimal value"  # noqa: E501  # nosec B101
+                        # Convert to float (handles int, float, and Decimal)
                         current_value_pair.append(float(value))
                         value_pair_index += 1
                     elif event == "string":
                         # Value (index 1) as string - Prometheus may return values
                         # as strings. This happens when value is "NaN", "Inf",
                         # "-Inf", or numeric string
+                        # Type narrowing: when event is "string", value is str
+                        # nosec B101: assert for type narrowing, not runtime validation
+                        assert isinstance(
+                            value, str
+                        ), "string event must have str value"  # noqa: E501  # nosec B101
                         try:
                             float_value = float(value)
                             # Check for special float values that should be skipped
