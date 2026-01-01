@@ -104,7 +104,13 @@ Metrics table:
 
 ```sql
 CREATE TABLE default.metrics (
-    id UUID MATERIALIZED generateUUIDv4(),
+    id UInt64 MATERIALIZED cityHash64(
+        timestamp,
+        name,
+        labels.key,
+        labels.value,
+        value
+    ) CODEC(ZSTD(6)),
     timestamp DateTime64(6, 'UTC'),
     name String CODEC(ZSTD(3)),
     labels Nested(
@@ -129,9 +135,11 @@ slow merges as data volume grows. With daily partitioning, merges only affect
 small date ranges, significantly improving performance.
 
 **Note on `id` column:** The `id` field is a MATERIALIZED column that is always
-auto-generated and cannot be overridden during insert. It is stored on disk and
-can be used in WHERE clauses, JOINs, and ORDER BY for efficient queries. By
-default, MATERIALIZED columns are not included in `SELECT *` results. To include
+auto-generated based on data content using `cityHash64()`. It provides unique
+identifier within the table (8 bytes, 50% smaller than UUID) and is compressed
+with ZSTD(6) codec for optimal compression of deterministic data. It is stored on
+disk and can be used in WHERE clauses, JOINs, and ORDER BY for efficient queries.
+By default, MATERIALIZED columns are not included in `SELECT *` results. To include
 `id` in results, either explicitly specify it (`SELECT id, * FROM ...`) or use
 the setting `SET asterisk_include_materialized_columns=1`.
 
@@ -139,7 +147,14 @@ ETL state table:
 
 ```sql
 CREATE TABLE default.etl (
-    id UUID MATERIALIZED generateUUIDv4(),
+    id UInt64 MATERIALIZED cityHash64(
+        timestamp_start,
+        timestamp_end,
+        timestamp_progress,
+        batch_window_seconds,
+        batch_rows,
+        batch_skipped_count
+    ) CODEC(ZSTD(6)),
     timestamp_start Nullable(DateTime),
     timestamp_end Nullable(DateTime),
     timestamp_progress Nullable(DateTime),
@@ -152,7 +167,8 @@ SETTINGS allow_nullable_key = 1;
 ```
 
 **Note on `id` column:** Same as in metrics table - MATERIALIZED column that is
-always auto-generated and cannot be overridden.
+always auto-generated based on data content using `cityHash64()`, providing
+unique identifier within the table (8 bytes compressed with ZSTD(6) codec).
 
 ## Logging
 
