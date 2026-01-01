@@ -9,7 +9,7 @@ Implements streaming ETL algorithm with three distinct stages:
 - Calculate processing window based on progress and batch window size.
 - Extract: Stream Prometheus response to file (prometheus_raw_*.json)
 - Transform: Stream parse JSON, process and transform data to ClickHouse format
-- Load: Stream processed data to ClickHouse (etl_processed_*.jsonl)
+- Load: Stream processed data to ClickHouse (etl_processed_*.tsv)
 - Save updated progress and end timestamps, plus window size and rows count
   to ClickHouse.
 
@@ -19,7 +19,6 @@ memory, enabling handling of very large Prometheus responses.
 
 from __future__ import annotations
 
-import json
 import os
 import tempfile
 import time
@@ -361,8 +360,9 @@ class EtlJob:
             window_end: End of time range (Unix timestamp, int)
 
         Returns:
-            Tuple of (file_path, rows_count) where file_path is path to JSONL file
-            with processed data and rows_count is number of rows written
+            Tuple of (file_path, rows_count) where file_path is path to TSV file
+            with processed data in TabSeparated format and rows_count is number of
+            rows written
 
         Raises:
             Exception: If Prometheus query fails, JSON parsing fails, or file
@@ -399,7 +399,7 @@ class EtlJob:
 
         # Stage 2 - Transform: Stream parse JSON and process data
         output_fd, output_file_path = self._create_temp_file(
-            prefix="etl_processed_", suffix=".jsonl"
+            prefix="etl_processed_", suffix=".tsv"
         )
 
         rows_count = 0
@@ -407,7 +407,7 @@ class EtlJob:
         try:
             with (
                 open(prom_response_path, "rb") as input_f,
-                os.fdopen(output_fd, "w", encoding="utf-8") as output_f,
+                os.fdopen(output_fd, "w", encoding="utf-8", newline="") as output_f,
             ):
                 # Stream parse JSON array items
                 parser = ijson.items(input_f, "data.result.item")
@@ -456,19 +456,26 @@ class EtlJob:
                         labels_keys = list(labels_sorted.keys())
                         labels_values = list(labels_sorted.values())
 
-                        # Write row as JSON line (JSONEachRow format for ClickHouse)
-                        # Nested structure is represented as object with .key and
-                        # .value arrays
-                        row = {
-                            "timestamp": ts,
-                            "name": metric_name,
-                            "labels.key": labels_keys,
-                            "labels.value": labels_values,
-                            "value": value,
-                        }
+                        # Format arrays for ClickHouse TabSeparated format
+                        # According to ClickHouse documentation:
+                        # - Arrays are written as ['a','b'] for strings
+                        # - Special characters in strings must be escaped: \ -> \\,
+                        #   ' -> \', \t -> \t, \n -> \n
+                        labels_keys_str = self._format_clickhouse_array(labels_keys)
+                        labels_values_str = self._format_clickhouse_array(labels_values)
+
+                        # Escape string values for TabSeparated format
+                        # TabSeparated requires escaping: \ -> \\, \t -> \t, \n -> \n
+                        metric_name_escaped = self._escape_tabseparated_chars(
+                            metric_name
+                        )
+
+                        # Write TabSeparated row: columns separated by \t, rows by \n
+                        # Column order: timestamp, name, labels.key[], labels.value[],
+                        # value
                         output_f.write(
-                            json.dumps(row, separators=(",", ":"), sort_keys=True)
-                            + "\n"
+                            f"{ts}\t{metric_name_escaped}\t{labels_keys_str}\t"
+                            f"{labels_values_str}\t{value}\n"
                         )
                         rows_count += 1
 
@@ -515,7 +522,7 @@ class EtlJob:
         return output_file_path, rows_count
 
     def _create_temp_file(
-        self, prefix: str = "etl_batch_", suffix: str = ".jsonl"
+        self, prefix: str = "etl_batch_", suffix: str = ".tsv"
     ) -> tuple[int, str]:
         """Create temporary file for ETL data.
 
@@ -525,7 +532,7 @@ class EtlJob:
 
         Args:
             prefix: File prefix for explicit naming (default: "etl_batch_")
-            suffix: File suffix/extension (default: ".jsonl")
+            suffix: File suffix/extension (default: ".tsv")
 
         Returns:
             Tuple of (file_descriptor, file_path) where file_descriptor can be
@@ -535,6 +542,54 @@ class EtlJob:
         temp_dir.mkdir(parents=True, exist_ok=True)
         fd, file_path = tempfile.mkstemp(suffix=suffix, dir=temp_dir, prefix=prefix)
         return fd, file_path
+
+    @staticmethod
+    def _escape_tabseparated_chars(value: str) -> str:
+        """Escape basic TabSeparated characters: backslash, tab, newline.
+
+        According to ClickHouse documentation, TabSeparated format requires
+        escaping of special characters:
+        - Backslash: backslash -> double backslash
+        - Tab: tab character -> escaped tab
+        - Newline: newline character -> escaped newline
+
+        Args:
+            value: String value to escape
+
+        Returns:
+            Escaped string with basic TabSeparated characters escaped
+        """
+        # Escape in order: backslash first, then tab, then newline
+        # This ensures we don't double-escape already escaped sequences
+        return value.replace("\\", "\\\\").replace("\t", "\\t").replace("\n", "\\n")
+
+    @staticmethod
+    def _format_clickhouse_array(arr: list[str]) -> str:
+        """Format Python list as ClickHouse array string for TabSeparated format.
+
+        According to ClickHouse documentation, arrays in TabSeparated format
+        are written as ['a','b'] for strings. String elements must have
+        special characters escaped:
+        - Backslash: backslash -> double backslash
+        - Single quote: single quote -> escaped single quote
+        - Tab: tab character -> escaped tab
+        - Newline: newline character -> escaped newline
+
+        Args:
+            arr: List of strings to format as ClickHouse array
+
+        Returns:
+            Formatted array string (e.g., "['a','b']" or "[]" for empty array)
+        """
+        if not arr:
+            return "[]"
+
+        # Escape each element: basic TabSeparated chars, then single quote
+        escaped = []
+        for elem in arr:
+            elem_escaped = EtlJob._escape_tabseparated_chars(elem).replace("'", "\\'")
+            escaped.append(f"'{elem_escaped}'")
+        return "[" + ",".join(escaped) + "]"
 
     @staticmethod
     def _cleanup_temp_file(file_path: str) -> None:
