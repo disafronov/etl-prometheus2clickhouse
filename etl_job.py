@@ -115,7 +115,7 @@ class EtlJob:
                     f"Successfully wrote data to ClickHouse from {output_filename}, "
                     f"rows: {rows_count}",
                     extra={
-                        "etl_job.clickhouse_write_success.file_path": file_path,
+                        "etl_job.clickhouse_write_success.file_name": output_filename,
                         "etl_job.clickhouse_write_success.rows_count": rows_count,
                     },
                 )
@@ -124,7 +124,7 @@ class EtlJob:
                     "Failed to write rows to ClickHouse",
                     extra={
                         "etl_job.write_failed.message": str(exc),
-                        "etl_job.write_failed.file_path": file_path,
+                        "etl_job.write_failed.file_name": os.path.basename(file_path),
                     },
                 )
                 raise
@@ -404,7 +404,9 @@ class EtlJob:
                 "Failed to fetch data from Prometheus",
                 extra={
                     "etl_job.fetch_failed.message": str(exc),
-                    "etl_job.fetch_failed.prom_response_path": prom_response_path,
+                    "etl_job.fetch_failed.prom_response_filename": os.path.basename(
+                        prom_response_path
+                    ),
                 },
             )
             raise
@@ -416,8 +418,8 @@ class EtlJob:
             f"Downloaded Prometheus response: {prom_response_filename}, "
             f"size: {prom_response_file_size} bytes",
             extra={
-                "etl_job.prometheus_download_success.prom_response_path": (
-                    prom_response_path
+                "etl_job.prometheus_download_success.prom_response_filename": (
+                    prom_response_filename
                 ),
                 "etl_job.prometheus_download_success.prom_response_file_size": (
                     prom_response_file_size
@@ -517,10 +519,12 @@ class EtlJob:
                 "Failed to transform data from Prometheus response",
                 extra={
                     "etl_job.fetch_write_failed.message": str(exc),
-                    "etl_job.fetch_write_failed.prom_response_path": (
-                        prom_response_path
+                    "etl_job.fetch_write_failed.prom_response_filename": (
+                        os.path.basename(prom_response_path)
                     ),
-                    "etl_job.fetch_write_failed.output_file_path": output_file_path,
+                    "etl_job.fetch_write_failed.output_file_name": os.path.basename(
+                        output_file_path
+                    ),
                 },
             )
             raise
@@ -548,7 +552,7 @@ class EtlJob:
             f"size: {output_file_size} bytes, rows: {rows_count}, "
             f"series: {series_count}",
             extra={
-                "etl_job.transformation_complete.file_path": output_file_path,
+                "etl_job.transformation_complete.file_name": output_filename,
                 "etl_job.transformation_complete.output_file_size": (output_file_size),
                 "etl_job.transformation_complete.rows_count": rows_count,
                 "etl_job.transformation_complete.series_count": series_count,
