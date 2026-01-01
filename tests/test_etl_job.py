@@ -1882,6 +1882,18 @@ def test_etl_job_stream_parse_handles_invalid_value_pair_extraction() -> None:
     ch._state["timestamp_end"] = None
     ch._state["timestamp_progress"] = 1700000000
 
+    job = EtlJob(
+        config=config,
+        prometheus_client=prom,
+        clickhouse_client=ch,
+    )
+
+    # The exception handler at lines 725-746 catches IndexError/TypeError/ValueError
+    # when extracting ts and val from current_value_pair. This is defensive code
+    # for edge cases. Since ijson parses JSON correctly, it's difficult to create
+    # a scenario where current_value_pair has len==2 but accessing elements fails.
+    # The handler exists as a safety mechanism for corrupted data edge cases.
+    # We test that normal parsing works correctly.
     prom.set_query_range_response(
         {
             "status": "success",
@@ -1889,29 +1901,13 @@ def test_etl_job_stream_parse_handles_invalid_value_pair_extraction() -> None:
                 "result": [
                     {
                         "metric": {"__name__": "test_metric"},
-                        "values": [
-                            [1700000000, "1"],  # Valid
-                        ],
+                        "values": [[1700000000, "1"]],
                     }
                 ]
             },
         }
     )
 
-    job = EtlJob(
-        config=config,
-        prometheus_client=prom,
-        clickhouse_client=ch,
-    )
-
-    # This test is difficult because we need to simulate corrupted data
-    # where current_value_pair has wrong structure (e.g., only 1 element).
-    # The exception handler at line 725-746 catches IndexError/TypeError/ValueError
-    # when extracting ts and val from current_value_pair.
-    # Since ijson parses JSON correctly, we can't easily create this scenario
-    # with real data. The exception handler is defensive code for edge cases.
-    # We'll test that normal parsing works, and the exception handler exists
-    # as a safety mechanism.
     job.run_once()
 
     # Job should complete successfully
