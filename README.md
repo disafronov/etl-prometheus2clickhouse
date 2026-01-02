@@ -6,7 +6,7 @@ ETL job that reads metrics from Prometheus, writes them to ClickHouse and uses s
 
 The job:
 
-- reads all metrics from Prometheus using `query_range` (always exports all metrics);
+- reads all metrics from Prometheus using `query_range` with `{__name__=~".+"}` selector (exports all metrics matching this selector);
 - writes rows into a single ClickHouse table:
   - `timestamp` (DateTime64(6, 'UTC')) – metric timestamp with microseconds precision;
   - `name` (String) – metric name;
@@ -17,8 +17,8 @@ The job:
   - `timestamp_start` – job start timestamp;
   - `timestamp_end` – job completion timestamp;
   - `batch_window_seconds` – size of processed window;
-  - `batch_rows` – number of rows processed in batch;
-  - `batch_skipped_count` – number of value pairs skipped due to format errors.
+  - `batch_rows` – number of metric value pairs (rows) successfully written to ClickHouse in this batch;
+  - `batch_skipped_count` – number of value pairs skipped due to format errors (non-numeric values that cannot be parsed as Float64).
 
 All connection settings are provided via environment variables. Job state is
 stored in ClickHouse ETL table.
@@ -97,6 +97,8 @@ inserts. This is required because the job is designed to be idempotent: if
 state update fails after successful data write, the job will reprocess
 the same window on the next run, which may result in duplicate rows.
 
+**Note:** Idempotency is ensured by the storage layer (ReplacingMergeTree engine), not by the ETL job itself. The job may insert duplicate rows, and ClickHouse handles deduplication during merge operations.
+
 You can use the default database or create a custom database. To create a custom
 database:
 
@@ -105,7 +107,11 @@ CREATE DATABASE IF NOT EXISTS metrics;
 ```
 
 Recommended table engine: `ReplacingMergeTree` or a table with deduplication
-enabled. The table schemas should match the following structure:
+enabled.
+
+**Note on deduplication:** ReplacingMergeTree performs deduplication asynchronously during background merge operations. Duplicate rows may be visible in queries until merges complete. Use `FINAL` keyword in SELECT queries to see deduplicated results immediately, though this may impact query performance.
+
+The table schemas should match the following structure:
 
 Metrics table:
 
@@ -177,6 +183,8 @@ always auto-generated based on data content using `cityHash64()`, providing
 unique identifier within the table (8 bytes, no compression codec applied as hash
 values have high entropy and do not compress well).
 
+**Note:** ETL state operates in second-level resolution (DateTime type), while metrics table uses microsecond precision (DateTime64(6)). This means state timestamps are rounded to seconds, which affects window boundaries and overlap calculations.
+
 ## Logging
 
 Logging is implemented with `logging-objects-with-schema` and ECS (Elastic Common Schema) formatter for structured JSON logging.
@@ -194,6 +202,8 @@ Logging is implemented with `logging-objects-with-schema` and ECS (Elastic Commo
 
 This separation allows easy filtering and routing in containerized environments and log aggregation systems.
 
+**Container environment:** This logging model is designed for containerized environments where stdout/stderr streams are aggregated by log collection systems (e.g., Docker, Kubernetes, log aggregators).
+
 ## Troubleshooting
 
 ### Job Stuck: TimestampStart Exists but TimestampEnd Missing
@@ -207,6 +217,9 @@ This separation allows easy filtering and routing in containerized environments 
 This happens when the job successfully marks its start (`timestamp_start` is saved to ClickHouse) but fails before completing the batch (e.g., error loading `timestamp_progress`, network failure, or application crash). The job's safety mechanism prevents concurrent runs by checking that the previous run completed.
 
 **Solution:**
+
+**Warning:** Manual INSERT operations into the ETL state table can violate job invariants and may cause data reprocessing or inconsistent state. Use these operations only when necessary and ensure you understand the implications. After manual intervention, verify that the job processes correctly on the next run.
+
 Set `timestamp_end` value in ClickHouse ETL table to a value greater than `timestamp_start`.
 Since the table uses ReplacingMergeTree with ORDER BY (timestamp_start), you need to insert
 a record with the same `timestamp_start` as the running job. This marks the previous job
