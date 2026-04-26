@@ -1,6 +1,6 @@
 FROM ghcr.io/astral-sh/uv:0.11.7 AS uv
 
-FROM ubuntu:noble-20260217 AS base
+FROM ubuntu:noble-20260410 AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
