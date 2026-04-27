@@ -658,7 +658,7 @@ version = "2.3.0"
 
 [[package]]
 name = "etl-prometheus2clickhouse"
-version = "5.1.4rc1"
+version = "5.1.4"
 
   [package.source]
   virtual = "."
