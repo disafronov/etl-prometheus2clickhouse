@@ -314,3 +314,5 @@ curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_s
 ```
 
 **Note:** After setting all three fields, the job will be able to start on the next run. The job will process data starting from `timestamp_progress` value. The `timestamp_start` and `timestamp_end` values are dummy values for initialization and will be replaced with real values on the first successful run.
+
+<!-- placeholder -->
