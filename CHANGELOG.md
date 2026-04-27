@@ -1,3 +1,9 @@
+## [5.1.3-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.2...v5.1.3-rc.1) (2026-04-27)
+
+### Bug Fixes
+
+* remove type ignore for password in ClickHouseClient initialization ([465b3eb](https://github.com/disafronov/etl-prometheus2clickhouse/commit/465b3ebef937a07325aecbcb44967c4caae06385))
+
 ## [5.1.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.0...v5.1.1) (2026-01-01)
 
 ## [5.1.1-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.0...v5.1.1-rc.1) (2026-01-01)
