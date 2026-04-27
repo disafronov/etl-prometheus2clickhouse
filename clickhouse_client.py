@@ -77,7 +77,7 @@ class ClickHouseClient:
                 host=host,
                 port=port,
                 username=config.user,
-                password=config.password,  # type: ignore[arg-type]
+                password=config.password,
                 secure=secure,
                 connect_timeout=config.connect_timeout,
                 send_receive_timeout=config.send_receive_timeout,
