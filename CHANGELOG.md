@@ -1,3 +1,5 @@
+## [5.1.5](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.4...v5.1.5) (2026-04-28)
+
 ## [5.1.5-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.4...v5.1.5-rc.1) (2026-04-28)
 
 ## [5.1.4](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.3...v5.1.4) (2026-04-27)
