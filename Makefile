@@ -1,3 +1,6 @@
+# Python version is pinned via `.python-version` (used by uv and CI).
+PYTHON_VERSION := $(shell tr -d '[:space:]' < .python-version)
+
 # Variables
 DOCKER_IMAGE = etl-prometheus2clickhouse
 PYTEST_CMD = uv run python -m pytest -v
@@ -24,7 +27,8 @@ help: ## Show this help message
 
 install: ## Install dependencies
 	@echo "Installing dependencies..."
-	uv sync
+	uv python install $(PYTHON_VERSION)
+	uv sync --python $(PYTHON_VERSION)
 	@echo "Installing pre-commit hooks..."
 	uv run pre-commit install
 
@@ -40,15 +44,11 @@ dead-code: ## Check for dead code using vulture
 	@echo "Checking for dead code..."
 	uv run vulture
 
-test: ## Run tests
-	@echo "Running tests..."
-	$(PYTEST_CMD)
-
-test-coverage: ## Run tests with coverage
+test: ## Run tests with coverage
 	@echo "Running tests with coverage..."
 	$(PYTEST_CMD) $(COVERAGE_OPTS)
 
-all: format lint test dead-code ## Run format, lint, test, and dead-code check
+all: lint test dead-code ## Run format, lint, test, and dead-code check
 	@echo "All checks completed successfully!"
 
 run: ## Run the application locally
