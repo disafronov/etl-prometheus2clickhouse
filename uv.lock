@@ -234,7 +234,7 @@ requires-dist = [
     { name = "clickhouse-connect", specifier = ">=0.15.1" },
     { name = "ecs-logging", specifier = ">=2.2.0" },
     { name = "ijson", specifier = ">=3.2.0" },
-    { name = "logging-objects-with-schema", specifier = ">=0.4.1" },
+    { name = "logging-objects-with-schema", specifier = ">=1.0.0" },
     { name = "pydantic", specifier = ">=2.13.3" },
     { name = "pydantic-settings", specifier = ">=2.14.0" },
     { name = "requests", specifier = ">=2.33.1" },
@@ -391,11 +391,11 @@ wheels = [
 
 [[package]]
 name = "logging-objects-with-schema"
-version = "0.4.1"
+version = "1.0.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/7a/f8/0ba7f2d4f246f06740ea7c5166fa3302b25df34de837c5bb217a4e61ecd0/logging_objects_with_schema-0.4.1.tar.gz", hash = "sha256:175b276662b67c973fc10f310d79ff71b61e067c9337bbd35f88fcbd8bcaea59", size = 28119, upload-time = "2026-04-28T07:06:40.117Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/26/4e/9331475f269a034a6e0c089e9c26f84ec7ef4661fb78635e9006a1753c85/logging_objects_with_schema-1.0.0.tar.gz", hash = "sha256:87b9ec19cdcbceb4c335036c36356f06975044c38aaccd2315ffc7420ff057be", size = 23613, upload-time = "2026-05-05T23:39:56.93Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/39/e6/c9f89def74199c2769e2d1b45d6dbca73472cf172156316d9c831ff2384a/logging_objects_with_schema-0.4.1-py3-none-any.whl", hash = "sha256:704a5ae4be409c4e5ecd0cec2218e440fffc70d205fe676716b3e4a9adcb642a", size = 31562, upload-time = "2026-04-28T07:06:38.848Z" },
+    { url = "https://files.pythonhosted.org/packages/3d/f0/31effa21f35654096231accfbee435a68cbd31d5c4450f7904e95c4c9b0b/logging_objects_with_schema-1.0.0-py3-none-any.whl", hash = "sha256:824071ec080fa55a13910fea6a5c1896d4bfcb57ea3d3c084f1c5450271e27bd", size = 26881, upload-time = "2026-05-05T23:39:55.616Z" },
 ]
 
 [[package]]
