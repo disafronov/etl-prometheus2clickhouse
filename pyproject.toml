@@ -81,6 +81,6 @@ directory = "htmlcov"
 
 [tool.vulture]
 min_confidence = 80
-exclude = [ ".venv", "__pycache__" ]
+exclude = [ ".venv" ]
 ignore_names = [ "cls" ]
 paths = [ "." ]
