@@ -36,13 +36,9 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = [ "tests" ]
 python_files = [ "test_*.py" ]
-python_classes = [ "Test*" ]
-python_functions = [ "test_*" ]
 
 [tool.isort]
 profile = "black"
-line_length = 88
-multi_line_output = 3
 
 [tool.black]
 line-length = 88
@@ -63,7 +59,7 @@ extend-exclude = """
 [tool.flake8]
 max-line-length = 88
 extend-ignore = [ "E203", "W503" ]
-exclude = [ ".venv", "__pycache__", ".git", "htmlcov" ]
+exclude = [ ".venv", "htmlcov" ]
 
 [tool.mypy]
 exclude = "tests/"
@@ -73,7 +69,7 @@ warn_unused_configs = true
 warn_unreachable = true
 
 [tool.bandit]
-exclude_dirs = [ ".venv", "__pycache__", ".git", "htmlcov", "tests" ]
+exclude_dirs = [ ".venv", "htmlcov", "tests" ]
 
 [tool.coverage.run]
 source = [ "." ]
@@ -83,11 +79,8 @@ branch = true
 [tool.coverage.report]
 fail_under = 100
 exclude_lines = [
-  "def __repr__",
-  "if self\\.debug",
   "raise AssertionError",
   "raise NotImplementedError",
-  "if 0:",
   "if __name__ == .__main__.:",
   "@(abc\\.)?abstractmethod",
   "pragma: no cover"
