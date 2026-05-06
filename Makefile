@@ -17,7 +17,7 @@ else
 endif
 export
 
-.PHONY: all clean dead-code docker docker-build docker-run format help install lint run test test-coverage
+.PHONY: all clean dead-code docker docker-build docker-run format help install lint run test
 
 help: ## Show this help message
 	@echo "Available commands:"
