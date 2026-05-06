@@ -43,18 +43,6 @@ profile = "black"
 [tool.black]
 line-length = 88
 include = "\\.pyi?$"
-extend-exclude = """
-/(
-  \\.eggs
-  | \\.git
-  | \\.hg
-  | \\.mypy_cache
-  | \\.tox
-  | \\.venv
-  | build
-  | dist
-)/
-"""
 
 [tool.flake8]
 max-line-length = 88
