@@ -719,31 +719,8 @@ class EtlJob:
                 elif prefix == "data.result.item.values.item" and event == "end_array":
                     # Value pair complete - write row immediately
                     if len(current_value_pair) == 2:
-                        try:
-                            ts = current_value_pair[0]
-                            val = current_value_pair[1]
-                        except (TypeError, ValueError, IndexError) as exc:
-                            logger.warning(
-                                "Skipping invalid value pair in Prometheus response",
-                                extra={
-                                    "etl_job.invalid_value_pair.name": (
-                                        current_metric_name
-                                    ),
-                                    "etl_job.invalid_value_pair.labels": str(
-                                        current_labels
-                                    ),
-                                    "etl_job.invalid_value_pair.value_pair": str(
-                                        current_value_pair
-                                    ),
-                                    "etl_job.invalid_value_pair.error": str(exc),
-                                    "etl_job.invalid_value_pair.error_type": type(
-                                        exc
-                                    ).__name__,
-                                },
-                            )
-                            current_value_pair = []
-                            value_pair_index = 0
-                            continue
+                        ts = current_value_pair[0]
+                        val = current_value_pair[1]
 
                         # Write TabSeparated row immediately
                         # Column order: timestamp, name, labels.key[],
