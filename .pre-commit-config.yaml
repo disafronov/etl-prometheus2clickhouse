@@ -46,13 +46,6 @@ repos:
 
   - repo: local
     hooks:
-      - id: make-format
-        name: make format (pre-commit)
-        stages: [pre-commit]
-        language: system
-        entry: make format
-        pass_filenames: false
-
       - id: make-lint
         name: make lint (pre-commit)
         stages: [pre-commit]
