@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:0.11.10 AS uv
+FROM ghcr.io/astral-sh/uv:0.11.11 AS uv
 
 FROM ubuntu:noble-20260410 AS base
 
