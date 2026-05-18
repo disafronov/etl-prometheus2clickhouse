@@ -5,7 +5,7 @@ description = "ETL job for transferring metrics from Prometheus to ClickHouse us
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-  "requests>=2.33.1",
+  "requests>=2.34.2",
   "pydantic>=2.13.4",
   "pydantic-settings>=2.14.1",
   "logging-objects-with-schema>=1.0.0",
