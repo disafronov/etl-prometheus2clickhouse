@@ -10,7 +10,7 @@ dependencies = [
   "pydantic-settings>=2.14.2",
   "logging-objects-with-schema>=1.0.1",
   "clickhouse-connect>=0.15.1",
-  "ijson>=3.2.0",
+  "ijson>=3.5.1",
   "ecs-logging>=2.2.0"
 ]
 
