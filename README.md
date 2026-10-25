@@ -1,6 +1,9 @@
 # etl-prometheus2clickhouse
 
-ETL job that reads metrics from Prometheus, writes them to ClickHouse and uses same ClickHouse to store job state.
+Resumable ETL that reads Prometheus range queries, writes metrics to
+ClickHouse, and stores processing progress there. If a data write succeeds but
+the progress update fails, a subsequent run can replay the same window.
+Duplicate collapse is delegated to the ClickHouse storage layer.
 
 ## Overview
 
@@ -92,12 +95,11 @@ This will run the job every 10 seconds. Adjust the sleep interval as needed.
 
 ## ClickHouse Table Requirements
 
-The target ClickHouse tables must be configured to handle potential duplicate
-inserts. This is required because the job is designed to be idempotent: if
-state update fails after successful data write, the job will reprocess
-the same window on the next run, which may result in duplicate rows.
-
-**Note:** Idempotency is ensured by the storage layer (ReplacingMergeTree engine), not by the ETL job itself. The job may insert duplicate rows, and ClickHouse handles deduplication during merge operations.
+The target ClickHouse tables must handle potential duplicate inserts. If a
+progress update fails after a successful data write, the next run may replay
+the same window and insert the rows again. The ETL does not deduplicate writes;
+duplicate collapse is delegated to the storage layer (for example,
+`ReplacingMergeTree`), subject to its ordering key and merge behavior.
 
 You can use the default database or create a custom database. To create a custom
 database:
