@@ -2,8 +2,10 @@
 
 Resumable ETL that reads Prometheus range queries, writes metrics to
 ClickHouse, and stores processing progress there. If a data write succeeds but
-the progress update fails, a subsequent run can replay the same window.
-Duplicate collapse is delegated to the ClickHouse storage layer.
+the progress update fails, the run may remain marked as running and block
+subsequent runs until manual investigation and closure. After that intervention,
+a subsequent run can replay the same window. Duplicate collapse is delegated to
+the ClickHouse storage layer.
 
 ## Overview
 
@@ -96,8 +98,9 @@ This will run the job every 10 seconds. Adjust the sleep interval as needed.
 ## ClickHouse Table Requirements
 
 The target ClickHouse tables must handle potential duplicate inserts. If a
-progress update fails after a successful data write, the next run may replay
-the same window and insert the rows again. The ETL does not deduplicate writes;
+progress update fails after a successful data write, a subsequent run may replay
+the same window and insert the rows again once any unclosed running state has
+been investigated and manually closed. The ETL does not deduplicate writes;
 duplicate collapse is delegated to the storage layer (for example,
 `ReplacingMergeTree`), subject to its ordering key and merge behavior.
 
@@ -111,7 +114,12 @@ CREATE DATABASE IF NOT EXISTS metrics;
 Recommended table engine: `ReplacingMergeTree` or a table with deduplication
 enabled.
 
-**Note on deduplication:** ReplacingMergeTree performs deduplication asynchronously during background merge operations. Duplicate rows may be visible in queries until merges complete. Use `FINAL` keyword in SELECT queries to see deduplicated results immediately, though this may impact query performance.
+**Note on deduplication:** `ReplacingMergeTree` provides eventual logical
+deduplication according to the table's ordering key and merge behavior, not
+physical exactly-once insertion. Replayed rows can be stored more than once and
+remain visible in ordinary queries until background merges collapse them. Use
+`FINAL` in SELECT queries to apply replacement rules at query time, though this
+may impact query performance.
 
 The table schemas should match the following structure:
 
@@ -218,6 +226,18 @@ This separation allows easy filtering and routing in containerized environments 
 **Cause:**
 This happens when the job successfully marks its start (`timestamp_start` is saved to ClickHouse) but fails before completing the batch (e.g., error loading `timestamp_progress`, network failure, or application crash). The job's safety mechanism prevents concurrent runs by checking that the previous run completed.
 
+An unclosed running state is deliberately **fail-closed**: even when every
+execution is ephemeral and the previous process is gone, subsequent executions
+remain blocked until an operator investigates and manually closes that state.
+There is no automatic expiry or recovery based on a `QueryFinish` entry in
+ClickHouse's query log.
+
+A timeout, connection loss, or process termination during a large ClickHouse
+`INSERT` can leave its outcome unknown to the client. Do not assume that the
+absence of a successful response means no rows were written. Investigate the
+server-side query and data state and ensure the previous execution is no longer
+active before closing its running state.
+
 **Solution:**
 
 **Warning:** Manual INSERT operations into the ETL state table can violate job invariants and may cause data reprocessing or inconsistent state. Use these operations only when necessary and ensure you understand the implications. After manual intervention, verify that the job processes correctly on the next run.
@@ -225,7 +245,10 @@ This happens when the job successfully marks its start (`timestamp_start` is sav
 Set `timestamp_end` value in ClickHouse ETL table to a value greater than `timestamp_start`.
 Since the table uses ReplacingMergeTree with ORDER BY (timestamp_start), you need to insert
 a record with the same `timestamp_start` as the running job. This marks the previous job
-as completed and allows the new job to start:
+as completed and allows the new job to pass the start check. This does not
+establish whether the metrics INSERT completed or advance `timestamp_progress`.
+The next execution can replay an already written window from the last saved
+progress value:
 
 ```bash
 # Get timestamp_start from the running job (last record with timestamp_end IS NULL)
