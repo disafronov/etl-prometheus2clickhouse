@@ -257,7 +257,7 @@ progress value:
 
 ```bash
 # Get timestamp_start from the running job (last record with timestamp_end IS NULL)
-TIMESTAMP_START=$(clickhouse-client --query "SELECT timestamp_start FROM default.etl FINAL WHERE timestamp_end IS NULL ORDER BY timestamp_start DESC LIMIT 1 FORMAT TabSeparated")
+TIMESTAMP_START=$(clickhouse-client --query "SELECT toUnixTimestamp(timestamp_start) FROM default.etl FINAL WHERE timestamp_end IS NULL ORDER BY timestamp_start DESC LIMIT 1 FORMAT TabSeparated")
 TIMESTAMP_END=$(date +%s)
 clickhouse-client --query "INSERT INTO default.etl (timestamp_start, timestamp_end) VALUES (toDateTime($TIMESTAMP_START), toDateTime($TIMESTAMP_END))"
 ```
@@ -266,7 +266,7 @@ Or using HTTP interface:
 
 ```bash
 # Get timestamp_start from the running job
-TIMESTAMP_START=$(curl -s "http://clickhouse:8123/?query=SELECT+timestamp_start+FROM+default.etl+FINAL+WHERE+timestamp_end+IS+NULL+ORDER+BY+timestamp_start+DESC+LIMIT+1+FORMAT+TabSeparated")
+TIMESTAMP_START=$(curl -s "http://clickhouse:8123/?query=SELECT+toUnixTimestamp(timestamp_start)+FROM+default.etl+FINAL+WHERE+timestamp_end+IS+NULL+ORDER+BY+timestamp_start+DESC+LIMIT+1+FORMAT+TabSeparated")
 TIMESTAMP_END=$(date +%s)
 curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_start,timestamp_end)+VALUES+(toDateTime($TIMESTAMP_START),toDateTime($TIMESTAMP_END))"
 ```
