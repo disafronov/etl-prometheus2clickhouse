@@ -28,13 +28,18 @@ The job:
 All connection settings are provided via environment variables. Job state is
 stored in ClickHouse ETL table.
 
-**Important:** Before the first run, the `timestamp_progress` value must be
-set in ClickHouse ETL table to specify the starting point for data processing.
-The job will fail if this value is not found.
+**Important:** Before the first run, initialize the ClickHouse ETL table with
+a completed bootstrap record containing `timestamp_start`, `timestamp_end`, and
+`timestamp_progress`, with `timestamp_end > timestamp_start`. The progress value
+defines the starting point for data processing; the start and end values are
+dummy timestamps that make the bootstrap record eligible for state loading.
+Setting only `timestamp_progress` is insufficient: the job reads progress only
+from completed records. See [TimestampProgress Not Found in ClickHouse](#timestampprogress-not-found-in-clickhouse)
+for initialization commands.
 
-Note: `timestamp_start` and `timestamp_end` may be absent on the first
-run (they will be created automatically). Only `timestamp_progress` is
-required before the first execution.
+Initialize this record before starting the job. The job marks itself as running
+before loading progress, so an invalid bootstrap can leave an unclosed running
+state that must be investigated and manually closed as described below.
 
 ## Requirements
 
@@ -281,7 +286,9 @@ If there was a previous successful run, the job will continue from the last succ
 
 This happens when:
 
-- This is the first run and the job has never completed successfully (no `timestamp_progress` was ever set)
+- No valid completed record contains `timestamp_progress`, including on the first
+  run if the bootstrap record is missing or has no `timestamp_end`, or
+  `timestamp_end <= timestamp_start`
 - The `timestamp_progress` value was deleted from ClickHouse ETL table
 - The ETL table doesn't exist or is empty
 
@@ -338,6 +345,12 @@ Or using HTTP interface:
 curl -X POST "http://clickhouse:8123/?query=INSERT+INTO+default.etl+(timestamp_start,timestamp_end,timestamp_progress)+VALUES+(toDateTime($TIMESTAMP_PROGRESS),toDateTime($((TIMESTAMP_PROGRESS+1))),toDateTime($TIMESTAMP_PROGRESS))"
 ```
 
-**Note:** After setting all three fields, the job will be able to start on the next run. The job will process data starting from `timestamp_progress` value. The `timestamp_start` and `timestamp_end` values are dummy values for initialization and will be replaced with real values on the first successful run.
+**Note:** This initializes progress; it does not close any separate running
+record left by an earlier failed attempt. Investigate and manually close such
+records as described in "Job Stuck" above before retrying. With no unclosed
+running state, the job can start and load the bootstrap progress. Successful
+runs write their own start, end, and progress values; `get_state()` selects the
+latest valid completed record by `timestamp_start`, so choose a bootstrap start
+timestamp earlier than the actual job runs.
 
 <!-- refactor: deps -->
