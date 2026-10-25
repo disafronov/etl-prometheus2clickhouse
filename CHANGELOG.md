@@ -1,3 +1,9 @@
+## [5.1.7-rc.2](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.7-rc.1...v5.1.7-rc.2) (2026-10-25)
+
+### Bug Fixes
+
+* **release:** sign generated releases as GitHub Actions ([05a8bd7](https://github.com/disafronov/etl-prometheus2clickhouse/commit/05a8bd70e98c34dc6490d32cf89031988e1ce8e0))
+
 ## [5.1.7-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.6...v5.1.7-rc.1) (2026-10-25)
 
 ## [5.1.6](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.5...v5.1.6) (2026-05-07)
