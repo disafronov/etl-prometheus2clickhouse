@@ -1,3 +1,5 @@
+## [5.1.7-rc.4](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.7-rc.3...v5.1.7-rc.4) (2026-10-27)
+
 ## [5.1.7-rc.3](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.7-rc.2...v5.1.7-rc.3) (2026-10-26)
 
 ### Bug Fixes
