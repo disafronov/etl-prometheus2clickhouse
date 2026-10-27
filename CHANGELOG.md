@@ -1,3 +1,10 @@
+## [5.1.7](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.6...v5.1.7) (2026-10-27)
+
+### Bug Fixes
+
+* align semantic-release policy and committer sign-off ([5f5076b](https://github.com/disafronov/etl-prometheus2clickhouse/commit/5f5076ba62795d1cadd4b3cf18e1a9ac76043839))
+* **release:** sign generated releases as GitHub Actions ([915ea11](https://github.com/disafronov/etl-prometheus2clickhouse/commit/915ea11dfd655a05a6dca33328f89537034b886b))
+
 ## [5.1.7-rc.4](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.7-rc.3...v5.1.7-rc.4) (2026-10-27)
 
 ## [5.1.7-rc.3](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.7-rc.2...v5.1.7-rc.3) (2026-10-26)
