@@ -538,11 +538,11 @@ wheels = [
 
 [[package]]
 name = "logging-objects-with-schema"
-version = "1.0.1"
+version = "1.0.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b1/2a/a14f40e9e3e8d297356e2a3d487a69b2557b8d616f76e73c3e49f62044cc/logging_objects_with_schema-1.0.1.tar.gz", hash = "sha256:adf51a27149e3864c54d71e491a4f456749a36c7ebd85caee6617c876dcacfff", size = 23329, upload-time = "2026-05-22T14:18:36.073Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b9/cb/65e1e88b2d3bdbe73a42a12cbb0659e20bd8cbbb6cc18fee58742505ad01/logging_objects_with_schema-1.0.3.tar.gz", hash = "sha256:c7b176838ee330889014268e43505e2345fec53c3f705edbc8f119274d7556e6", size = 27674, upload-time = "2026-10-25T21:15:57.042Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6a/c2/cf3ba9ab9c9d2eeefd46ec3d80ea9d1d38c8c4cab0dbe0d70de5dbf3bc40/logging_objects_with_schema-1.0.1-py3-none-any.whl", hash = "sha256:6ea3e7854f41b2b5eed1b3e1b09d6a574aefdca1f78bc3fef5edea1c98e8a1fc", size = 26835, upload-time = "2026-05-22T14:18:34.207Z" },
+    { url = "https://files.pythonhosted.org/packages/f2/d6/ffdd62bb612bdac7fed2b36536fdcc98ba8f128b2648a363a347ec4f7725/logging_objects_with_schema-1.0.3-py3-none-any.whl", hash = "sha256:f1685c11acf572011dc6016c4e6e46b02529efca4ac72795a5d516da1ebdce81", size = 27175, upload-time = "2026-10-25T21:15:55.934Z" },
 ]
 
 [[package]]
