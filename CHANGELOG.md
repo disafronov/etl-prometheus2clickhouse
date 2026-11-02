@@ -1,3 +1,10 @@
+## [5.1.8](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.7...v5.1.8) (2026-11-02)
+
+### Code Refactoring
+
+* deps ([d343a8a](https://github.com/disafronov/etl-prometheus2clickhouse/commit/d343a8a2dd2a473e8c3196d4fa06b1d638bd5e2a))
+* use default semantic-release configuration ([aa0ab61](https://github.com/disafronov/etl-prometheus2clickhouse/commit/aa0ab61af8d87771fafd06e4dc6da1809c54b9d0))
+
 ## [5.1.8-rc.1](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.7...v5.1.8-rc.1) (2026-10-30)
 
 ## [5.1.7](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.6...v5.1.7) (2026-10-27)
