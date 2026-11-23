@@ -1,3 +1,9 @@
+## [5.1.10](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.9...v5.1.10) (2026-11-23)
+
+### Code Refactoring
+
+* deps ([e36b6c9](https://github.com/disafronov/etl-prometheus2clickhouse/commit/e36b6c9b9a5976302736210f9bf32a18853960f3))
+
 ## [5.1.9](https://github.com/disafronov/etl-prometheus2clickhouse/compare/v5.1.8...v5.1.9) (2026-11-03)
 
 ### Code Refactoring
